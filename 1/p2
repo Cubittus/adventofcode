@@ -1,0 +1,19 @@
+#!/bin/bash
+function counthigher
+{
+	A=$1 B=$2 C=$3 N=0
+	shift 3
+	while (( $# )); do
+		if (( ( A + B + C ) < ( B + C + $1 ) )); then
+			(( N++ ))
+		fi
+		A=$B B=$C C=$1
+		shift
+	done
+	echo $N
+}
+
+INPUT=( $(cat input.txt) )
+
+counthigher "${INPUT[@]}"
+
