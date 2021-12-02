@@ -1,0 +1,22 @@
+#!/bin/bash
+
+function navigate
+{
+	POSITION=0
+	DEPTH=0
+	while (( $# )); do
+		case $1 in
+			forward ) (( POSITION += $2 )) ;;
+			down )    (( DEPTH += $2 )) ;;
+			up )      (( DEPTH -= $2 )) ;;
+		esac
+		shift 2
+	done
+	echo "Position $POSITION  Depth $DEPTH"
+	echo "Multiplied = $(( POSITION * DEPTH ))"
+}
+
+INPUT=( $(cat input.txt) )
+
+navigate "${INPUT[@]}"
+
