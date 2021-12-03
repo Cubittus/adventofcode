@@ -13,7 +13,7 @@ function counthigher
 	echo $N
 }
 
-INPUT=( $(cat input.txt) )
+INPUT=( $(< input.txt) )
 
 counthigher "${INPUT[@]}"
 

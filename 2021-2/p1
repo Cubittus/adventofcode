@@ -16,7 +16,7 @@ function navigate
 	echo "Multiplied = $(( POSITION * DEPTH ))"
 }
 
-INPUT=( $(cat input.txt) )
+INPUT=( $(< input.txt) )
 
 navigate "${INPUT[@]}"
 
