@@ -1,0 +1,41 @@
+#!/bin/bash
+
+function calcpowerconsumption
+{
+	W=${#1}
+	S=()
+	N=0
+	for (( P = 0 ; P < W ; P++ )); do
+		(( S[P] = 0 ))
+	done
+	while (( $# )); do
+		for (( P = 0 ; P < W ; P++ )); do
+			(( S[P] += ${1:P:1} ))
+		done
+		(( N++ ))
+		shift
+	done
+	B=() I=()
+	for (( P = 0 ; P < W ; P++ )); do
+		if (( S[P] > N / 2 )); then
+			(( B[P] = 1 ))
+			(( I[P] = 0 ))
+		else
+			(( B[P] = 0 ))
+			(( I[P] = 1 ))
+		fi
+	done
+	echo "$W $N"
+	echo "${S[@]}"
+	echo "${B[@]}"
+	IFS=''
+	V1="${B[*]}"
+	V2="${I[*]}"
+	echo $V1 $V2
+	echo $(( 2#$V1 )) $(( 2#$V2 ))
+	echo $(( 2#$V1 * 2#$V2 ))
+}
+
+INPUT=( $(< input.txt) )
+
+calcpowerconsumption ${INPUT[@]}

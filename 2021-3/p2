@@ -1,0 +1,68 @@
+#!/bin/bash
+
+function poscommon
+{
+	local S=0 P=$1
+	shift
+	local N=$#
+	while (( $# )); do
+		(( S += ${1:$P:1} ))
+		shift
+	done
+	echo $(( S*2 >= N ))
+}
+
+function calclifesupport
+{
+	W=${#1}
+	ALL=( $@ )
+	(( N = $# ))
+
+	OX=( ${ALL[@]} )
+	(( OXN = N ))
+	for (( P = 0 ; P < W ; P++ )); do
+		S=$(poscommon $P ${OX[@]})
+		OX2=()
+		(( OXN2 = 0 ))
+		for O in ${OX[@]}; do
+			if (( ${O:$P:1} == S )); then
+				OX2[$OXN2]=$O
+				(( OXN2++ ))
+			fi
+		done
+		OX=( ${OX2[@]} )
+		(( OXN = OXN2 ))
+		if (( OXN == 1 )); then
+			break
+		fi
+	done
+
+	echo ${OX[0]}
+
+	CO=( ${ALL[@]} )
+	(( CON = N ))
+	for (( P = 0 ; P < W ; P++ )); do
+		(( S = 1 - $(poscommon $P ${CO[@]}) ))
+		CO2=()
+		(( CON2 = 0 ))
+		for C in ${CO[@]}; do
+			if (( ${C:$P:1} == S )); then
+				CO2[$CON2]=$C
+				(( CON2++ ))
+			fi
+		done
+		CO=( ${CO2[@]} )
+		(( CON = CON2 ))
+		if (( CON == 1 )); then
+			break
+		fi
+	done
+
+	echo ${CO[0]}
+
+	echo "$(( 2#${OX[0]} )) * $(( 2#${CO[0]} )) = $(( 2#${OX[0]} * 2#${CO[0]} ))"
+}
+
+INPUT=( $(< input.txt) )
+
+calclifesupport ${INPUT[@]}
