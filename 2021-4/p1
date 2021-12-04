@@ -1,0 +1,71 @@
+#!/bin/bash
+
+function calcwinner
+{
+	local -i BOARD=$1 PICK=$2
+	local NUMS=( ${ROW[@]:BOARD*25:25} )
+	local -i TOT=0 N
+	for (( N=0; N < 25; N++ )); do
+		(( TOT += NUMS[N] ))
+	done
+	echo "Board $((BOARD+1)) wins"
+	echo "Total $TOT  Pick $PICK"
+	echo "Score $((TOT * PICK))"
+
+}
+
+function checkpicks
+{
+	local PICK
+	local -i L N P=0
+
+	while (( $# )); do
+		PICK=$1
+		for (( N = 0; N < NUMLINES * 5 ; N++ )); do
+			if (( ROW[N] == PICK )); then
+				ROW[N]=0
+			fi
+			if (( COL[N] == PICK )); then
+				COL[N]=0
+			fi
+		done
+		(( P++ ))
+		if (( P >= 5 )); then
+			for (( L = 0; L < NUMLINES ; L++ )); do
+				if [[ "${ROW[@]:L*5:5}" == "0 0 0 0 0" ]]; then
+					calcwinner $(( L / 5 )) $PICK
+					return
+				fi
+				if [[ "${COL[@]:L*5:5}" == "0 0 0 0 0" ]]; then
+					calcwinner $(( L / 5 )) $PICK
+					return
+				fi
+			done
+		fi
+		shift
+	done
+}
+
+function findwinner
+{
+	PICKS=$1
+	shift
+	ROW=()
+	COL=()
+	(( NUMLINES = $# / 5 ))
+	while (( $# >= 25 )); do
+		ROW+=( ${@:1:25} )
+		COL+=( $1 $6    ${11} ${16} ${21} )
+		COL+=( $2 $7    ${12} ${17} ${22} )
+		COL+=( $3 $8    ${13} ${18} ${23} )
+		COL+=( $4 $9    ${14} ${19} ${24} )
+		COL+=( $5 ${10} ${15} ${20} ${25} )
+		shift 25
+	done
+	echo "$(( ${#ROW[*]} / 25 )) Boards"
+	checkpicks ${PICKS//,/ }
+}
+
+INPUT=( $(< input.txt) )
+
+findwinner ${INPUT[@]}
