@@ -1,0 +1,86 @@
+#!/bin/bash
+
+function findoverlaps
+{
+	declare -A VENT=()
+	declare -i X Y X1 X2 Y1 Y2 XMAX=0 YMAX=0 OVERLAPS=0 I
+	while (( $# >= 3 )); do
+		(( X1=${1%,*} ))
+		(( Y1=${1#*,} ))
+		(( X2=${3%,*} ))
+		(( Y2=${3#*,} ))
+		(( XMAX = (X1 > XMAX) ? X1 : XMAX ))
+		(( XMAX = (X2 > XMAX) ? X2 : XMAX ))
+		(( YMAX = (Y1 > YMAX) ? Y1 : YMAX ))
+		(( YMAX = (Y2 > YMAX) ? Y2 : YMAX ))
+		if (( X1 == X2 )); then
+			echo "Ver $X1 $Y1-$Y2"
+			if (( Y2 >= Y1 )); then
+				for (( Y = Y1 ; Y <= Y2 ; Y++ )); do
+					(( VENT[$X1,$Y]++ ))
+				done
+			else
+				for (( Y = Y2 ; Y <= Y1 ; Y++ )); do
+					(( VENT[$X1,$Y]++ ))
+				done
+			fi
+		elif (( Y1 == Y2 )); then
+			echo "Hor $X1-$X2 $Y1"
+			if (( X2 >= X1 )); then
+				for (( X = X1 ; X <= X2 ; X++ )); do
+					(( VENT[$X,$Y1]++ ))
+				done
+			else
+				for (( X = X2 ; X <= X1 ; X++ )); do
+					(( VENT[$X,$Y1]++ ))
+				done
+			fi
+		else
+			echo "Dia $X1-$X2 $Y1-$Y2"
+			if (( X2 > X1 )); then
+				if (( Y2 > Y1 )); then
+					for (( I = 0 ; I <= X2-X1 ; I++ )); do
+						(( X = X1 + I ))
+						(( Y = Y1 + I ))
+						(( VENT[$X,$Y]++ ))
+					done
+				else
+					for (( I = 0 ; I <= X2-X1 ; I++ )); do
+						(( X = X1 + I ))
+						(( Y = Y1 - I ))
+						(( VENT[$X,$Y]++ ))
+					done
+				fi
+			else
+				if (( Y2 > Y1 )); then
+					for (( I = 0 ; I <= X1-X2 ; I++ )); do
+						(( X = X1 - I ))
+						(( Y = Y1 + I ))
+						(( VENT[$X,$Y]++ ))
+					done
+				else
+					for (( I = 0 ; I <= X1-X2 ; I++ )); do
+						(( X = X1 - I ))
+						(( Y = Y1 - I ))
+						(( VENT[$X,$Y]++ ))
+					done
+				fi
+			fi
+		fi
+		shift 3
+	done
+	echo "XMax=$XMAX YMax=$YMAX"
+	for (( Y = 0; Y <= YMAX ; Y++ )); do
+		for (( X = 0; X < XMAX ; X++ )); do
+			echo -n ${VENT[$X,$Y]:-.}
+			if (( VENT[$X,$Y] > 1 )); then
+				(( OVERLAPS++ ))
+			fi
+		done
+		echo
+	done
+	echo "Overlaps = $OVERLAPS"
+}
+
+INPUT=( $(< input.txt ) )
+findoverlaps "${INPUT[@]}"
