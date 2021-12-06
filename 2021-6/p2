@@ -1,0 +1,23 @@
+#!/bin/bash
+
+function fishpop
+{
+	DAYS=$1
+	shift
+	FISH=( 0 0 0 0 0 0 0 0 0 )
+	while (( $# )); do
+		(( FISH[$1]++ ))
+		shift
+	done
+	echo ${FISH[@]}
+	for (( D = 0 ; D < DAYS ; D++ )); do
+		FISH=( ${FISH[1]} ${FISH[2]} ${FISH[3]} ${FISH[4]} ${FISH[5]} ${FISH[6]} $(( FISH[7] + FISH[0] )) ${FISH[8]} ${FISH[0]} )
+	done
+	echo ${FISH[@]}
+	echo "Total $(( FISH[0]+FISH[1]+FISH[2]+FISH[3]+FISH[4]+FISH[5]+FISH[6]+FISH[7]+FISH[8] ))"
+}
+
+INPUT="$(< input.txt )"
+
+fishpop 256 ${INPUT//,/ }
+
