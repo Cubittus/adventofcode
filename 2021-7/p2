@@ -1,0 +1,56 @@
+#!/bin/bash
+
+function calcfuel
+{
+	MOVETO=$1
+	POS=( ${!CRAB[@]} )
+	NUMPOS=${#POS[@]}
+	(( FUEL = 0 ))
+	for (( N = 0 ; N < NUMPOS ; N++ )); do
+		(( POSN = POS[N] ))
+		if (( POSN < MOVETO )); then
+			(( FUEL += (MOVETO - POSN) * (MOVETO - POSN + 1) * CRAB[POSN] / 2 ))
+		else
+			(( FUEL += (POSN - MOVETO) * (POSN - MOVETO + 1) * CRAB[POSN] / 2 ))
+		fi
+	done
+	echo "Position $MOVETO Fuel used $FUEL"
+}
+
+function crabalign
+{
+	CRAB=()
+	(( MINPOS = 1**9 ))
+	(( MAXPOS = 0 ))
+	(( SUM = 0 ))
+	(( COUNT = 0 ))
+	while (( $# )); do
+		(( CRAB[$1]++ ))
+		(( MINPOS = (MINPOS < $1) ? MINPOS : $1 ))
+		(( MAXPOS = (MAXPOS > $1) ? MAXPOS : $1 ))
+		(( SUM += $1 ))
+		(( COUNT++ ))
+		shift
+	done
+	(( MEAN = (SUM + COUNT / 2 ) / COUNT ))
+	echo "Range $MINPOS to $MAXPOS"
+	echo "Total $SUM  Count $COUNT  Mean $MEAN"
+	calcfuel $((MEAN-1))
+	(( FUEL1 = FUEL ))
+	calcfuel $((MEAN))
+	(( FUEL2 = FUEL ))
+	calcfuel $((MEAN+1))
+	(( FUEL3 = FUEL ))
+	(( FUEL = FUEL1 ))
+	if (( FUEL > FUEL2 )); then
+		(( FUEL = FUEL2 ))
+	fi
+	if (( FUEL > FUEL3 )); then
+		(( FUEL = FUEL3 ))
+	fi
+	echo "Min fuel $FUEL"
+}
+
+INPUT=$(< input.txt)
+
+crabalign ${INPUT//,/ }
