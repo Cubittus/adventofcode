@@ -50,7 +50,6 @@
 
 function decode
 {
-	declare -A CODE=()
 	TOTAL=0
 	while (( $# >= 15 )); do
 		LEN5=() LEN6=()
