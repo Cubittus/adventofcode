@@ -1,0 +1,127 @@
+#!/bin/bash
+
+#  A
+# B C
+#  D
+# E F
+#  G
+
+# 0 : A  B  C     E  F  G = 6
+# 1 :       C        F    = 2
+# 2 : A     C  D  E     G = 5
+# 3 : A     C  D     F  G = 5
+# 4 :    B  C  D     F    = 4
+# 5 : A  B     D     F  G = 5
+# 6 : A  B     D  E  F  G = 6
+# 7 : A     C        F    = 3
+# 8 : A  B  C  D  E  F  G = 7
+# 9 : A  B  C  D     F  G = 6
+
+# 1 :       C        F    = 2
+# 7 : A     C        F    = 3
+# 4 :    B  C  D     F    = 4
+# 2 : A     C  D  E     G = 5
+# 3 : A     C  D     F  G = 5
+# 5 : A  B     D     F  G = 5
+# 0 : A  B  C     E  F  G = 6
+# 6 : A  B     D  E  F  G = 6
+# 9 : A  B  C  D     F  G = 6
+# 8 : A  B  C  D  E  F  G = 7
+
+# LEN2 => CF      => ONE
+# LEN3 => ACF     => SEVEN
+# LEN4 => BCDF    => FOUR
+# LEN7 => ABCDEFG => EIGHT
+# LEN5 => ACDEG / ACDFG / ABDFG :: TWO / THREE / FIVE
+# LEN6 => ABCEFG / ABDEFG / ABCDFG :: ZERO / SIX / NINE
+
+# LEN5 & ONE => C / CF / F
+# LEN5 & ONE = LEN2 => THREE
+# LEN5 & FOUR => CD / CDF / BDF
+# LEN5 & FOUR = LEN2 => TWO
+# LEN5 => FIVE
+
+# LEN6 & ONE => CF / F / CF
+# LEN6 & ONE => LEN1 => SIX
+# LEN6 & FOUR => BCF / BDF / BCDF
+# LEN6 & FOUR = LEN4 => NINE
+# LEN6 => ZERO
+
+
+function decode
+{
+	declare -A CODE=()
+	TOTAL=0
+	while (( $# >= 15 )); do
+		LEN5=() LEN6=()
+		for (( N = 0 ; N < 10 ; N++ )); do
+			(( NL = ${#1} ))
+			if (( NL == 2 )); then
+				ONE=$1
+			elif (( NL == 3 )); then
+				SEVEN=$1
+			elif (( NL == 4 )); then
+				FOUR=$1
+			elif (( NL == 7 )); then
+				EIGHT=$1
+			elif (( NL == 5 )); then
+				LEN5+=( $1 )
+			elif (( NL == 6 )); then
+				LEN6+=( $1 )
+			else
+				echo Wut
+				exit 1
+			fi
+			shift
+		done
+		shift
+		for (( N = 0 ; N < 3 ; N++ )); do
+			LEN5ANDONE=${LEN5[N]//[!$ONE]/}
+			if (( ${#LEN5ANDONE} == 2 )); then
+				THREE=${LEN5[N]}
+				continue
+			fi
+			LEN5ANDFOUR=${LEN5[N]//[!$FOUR]/}
+			if (( ${#LEN5ANDFOUR} == 2 )); then
+				TWO=${LEN5[N]}
+				continue
+			fi
+			FIVE=${LEN5[N]}
+		done
+		for (( N = 0 ; N < 3 ; N++ )); do
+			LEN6ANDONE=${LEN6[N]//[!$ONE]/}
+			if (( ${#LEN6ANDONE} == 1 )); then
+				SIX=${LEN6[N]}
+				continue
+			fi
+			LEN6ANDFOUR=${LEN6[N]//[!$FOUR]/}
+			if (( ${#LEN6ANDFOUR} == 4 )); then
+				NINE=${LEN6[N]}
+				continue;
+			fi
+			ZERO=${LEN6[N]}
+		done
+		OUTPUT=0
+		for (( N = 0 ; N < 4 ; N++ )); do
+			O=$1
+			(( D = 0 ))
+			for DC in $ZERO $ONE $TWO $THREE $FOUR $FIVE $SIX $SEVEN $EIGHT $NINE ; do
+				if (( ${#O} == ${#DC} )); then
+					OANDDC=${O//[!$DC]/}
+					if (( ${#OANDDC} == ${#O} )); then
+						(( OUTPUT = OUTPUT * 10 + D ))
+						break
+					fi
+				fi
+				(( D++ ))
+			done
+			shift
+		done
+		(( TOTAL += OUTPUT ))
+	done
+	echo "TOTAL = $TOTAL"
+}
+
+INPUT=( $(< input.txt ) )
+
+decode "${INPUT[@]}"

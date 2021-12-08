@@ -1,0 +1,40 @@
+#!/bin/bash
+
+#  A
+# B C
+#  D
+# E F
+#  G
+
+# 0 : A  B  C     E  F  G = 6
+# 1 :       C        F    = 2
+# 2 : A     C  D  E     G = 5
+# 3 : A     C  D     F  G = 5
+# 4 :    B  C  D     F    = 4
+# 5 : A  B     D     F  G = 5
+# 6 : A  B     D  E  F  G = 6
+# 7 : A     C        F    = 3
+# 8 : A  B  C  D  E  F  G = 7
+# 9 : A  B  C  D     F  G = 6
+# = : 8  6  8  7  4  9  7
+
+function decode
+{
+	COUNT1478=0
+	while (( $# >= 15 )); do
+		shift 11
+		for (( N = 1 ; N <= 4 ; N++)); do
+			NL=${#1}
+			echo "$1 : $NL"
+			if (( NL == 2 || NL == 3 || NL == 4 || NL == 7 )); then
+				(( COUNT1478++ ))
+			fi
+			shift
+		done
+	done
+	echo "Digits 1, 4, 7, 8 appear $COUNT1478 times"
+}
+
+INPUT=( $(< input.txt ) )
+
+decode "${INPUT[@]}"
