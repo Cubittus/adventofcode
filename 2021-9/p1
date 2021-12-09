@@ -1,0 +1,39 @@
+#!/bin/bash
+
+function risklevel
+{
+	(( HEIGHT = $# ))
+	(( WIDTH = ${#1} ))
+	echo "Map $WIDTH x $HEIGHT"
+	printf -v EDGE "%$((WIDTH + 2))s" ' '
+	EDGE=${EDGE// /9}
+	MAP=( $EDGE )
+	L=1
+	while (( $# )); do
+		MAP[L]="9${1}9"
+		(( L++ ))
+		shift
+	done
+	MAP[L]=$EDGE
+	TOTALRISK=0
+	for (( Y = 1 ; Y <= HEIGHT ; Y++ )); do
+		for (( X = 1 ; X <= WIDTH ; X++ )); do
+			if (( ${MAP[Y]:X:1} < ${MAP[Y]:X-1:1} )); then
+				if (( ${MAP[Y]:X:1} < ${MAP[Y]:X+1:1} )); then
+					if (( ${MAP[Y]:X:1} < ${MAP[Y-1]:X:1} )); then
+						if (( ${MAP[Y]:X:1} < ${MAP[Y+1]:X:1} )); then
+							echo "Low point ${MAP[Y]:X:1} at $X , $Y"
+							(( TOTALRISK += ${MAP[Y]:X:1} + 1 ))
+						fi
+					fi
+				fi
+			fi
+		done
+	done
+	echo "Total risk = $TOTALRISK"
+}
+
+INPUT=( $(< input.txt ) )
+
+risklevel ${INPUT[@]}
+

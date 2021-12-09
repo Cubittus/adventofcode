@@ -1,0 +1,104 @@
+#!/bin/bash
+
+function risklevel
+{
+	(( HEIGHT = $# ))
+	(( WIDTH = ${#1} ))
+	echo "Map $WIDTH x $HEIGHT"
+	printf -v EDGE "%$((WIDTH + 2))s" ' '
+	EDGE=${EDGE// /9}
+	MAP=( $EDGE )
+	(( Y = 1 ))
+	while (( $# )); do
+		MAP[Y]="9${1}9"
+		(( Y++ ))
+		shift
+	done
+	MAP[Y]=$EDGE
+	LOWX=()
+	LOWY=()
+	(( L = 0 ))
+	for (( Y = 1 ; Y <= HEIGHT ; Y++ )); do
+		for (( X = 1 ; X <= WIDTH ; X++ )); do
+			if (( ${MAP[Y]:X:1} < ${MAP[Y]:X-1:1} )); then
+				if (( ${MAP[Y]:X:1} < ${MAP[Y]:X+1:1} )); then
+					if (( ${MAP[Y]:X:1} < ${MAP[Y-1]:X:1} )); then
+						if (( ${MAP[Y]:X:1} < ${MAP[Y+1]:X:1} )); then
+							echo "Low point ${MAP[Y]:X:1} at $X , $Y"
+							(( LOWX[L] = X ))
+							(( LOWY[L] = Y ))
+							(( L++ ))
+						fi
+					fi
+				fi
+			fi
+		done
+	done
+	(( LOWCOUNT=L ))
+	LOWAREA=()
+	declare -A BASIN
+	BIGGEST=( 0 0 0 )
+	for (( L = 0 ; L < LOWCOUNT ; L++ )); do
+		BASIN=()
+		EDGEX=( ${LOWX[L]} ) EDGEY=( ${LOWY[L]} )
+		EP=0 ES=1
+		while (( EP < ES )); do
+			X=${EDGEX[EP]}
+			Y=${EDGEY[EP]}
+			BASIN[$X,$Y]=1
+			if (( ${MAP[Y]:X-1:1} < 9 )); then
+				if (( ! BASIN[$((X-1)),$Y] )); then
+					(( EDGEX[ES] = X - 1 ))
+					(( EDGEY[ES] = Y ))
+					(( ES++ ))
+					(( BASIN[$((X-1)),$Y] = 1 ))
+				fi
+			fi
+			if (( ${MAP[Y]:X+1:1} < 9 )); then
+				if (( ! BASIN[$((X+1)),$Y] )); then
+					(( EDGEX[ES] = X + 1 ))
+					(( EDGEY[ES] = Y ))
+					(( ES++ ))
+					(( BASIN[$((X+1)),$Y] = 1 ))
+				fi
+			fi
+			if (( ${MAP[Y-1]:X:1} < 9 )); then
+				if (( ! BASIN[$X,$((Y-1))] )); then
+					(( EDGEX[ES] = X ))
+					(( EDGEY[ES] = Y - 1 ))
+					(( ES++ ))
+					(( BASIN[$X,$((Y-1))] = 1 ))
+				fi
+			fi
+			if (( ${MAP[Y+1]:X:1} < 9 )); then
+				if (( ! BASIN[$X,$((Y+1))] )); then
+					(( EDGEX[ES] = X ))
+					(( EDGEY[ES] = Y + 1 ))
+					(( ES++ ))
+					(( BASIN[$X,$((Y+1))] = 1 ))
+				fi
+			fi
+			(( EP++ ))
+		done
+		(( LOWAREA[L] = ${#BASIN[@]} ))
+		echo "Basin $((L+1)) at $X , $Y is size ${LOWAREA[L]}"
+		if (( LOWAREA[L] > BIGGEST[0] )); then
+			(( BIGGEST[2] = BIGGEST[1] ))
+			(( BIGGEST[1] = BIGGEST[0] ))
+			(( BIGGEST[0] = LOWAREA[L] ))
+		elif (( LOWAREA[L] > BIGGEST[1] )); then
+			(( BIGGEST[2] = BIGGEST[1] ))
+			(( BIGGEST[1] = LOWAREA[L] ))
+		elif (( LOWAREA[L] > BIGGEST[2] )); then
+			(( BIGGEST[2] = LOWAREA[L] ))
+		fi
+		echo "Biggest basins so far = ${BIGGEST[@]}"
+	done
+	echo "Biggest basins are ${BIGGEST[@]}"
+	echo "Multiplied = $(( BIGGEST[0] * BIGGEST[1] * BIGGEST[2] ))"
+}
+
+INPUT=( $(< input.txt ) )
+
+risklevel ${INPUT[@]}
+
