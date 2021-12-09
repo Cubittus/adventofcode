@@ -1,6 +1,6 @@
 #!/bin/bash
 
-function risklevel
+function mapbasins
 {
 	(( HEIGHT = $# ))
 	(( WIDTH = ${#1} ))
@@ -100,5 +100,5 @@ function risklevel
 
 INPUT=( $(< input.txt ) )
 
-risklevel ${INPUT[@]}
+mapbasins ${INPUT[@]}
 
