@@ -1,0 +1,45 @@
+#!/bin/bash
+
+function scoreerrors
+{
+	(( PAREN = 3 ))
+	(( BRACK = 57 ))
+	(( BRACE = 1197 ))
+	(( ANGLE = 25137 ))
+	(( TOTALSCORE = 0 ))
+	while (( $# )); do
+		OPEN=()
+		(( DEPTH = 0 ))
+		(( LEN = ${#1} ))
+		(( SCORE = 0 ))
+		for (( I = 0 ; I < LEN ; I++ )); do
+			(( CHECK = 0 ))
+			case "${1:$I:1}" in
+				\( ) OPEN+=( $PAREN ) ;;
+				\[ ) OPEN+=( $BRACK ) ;;
+				\{ ) OPEN+=( $BRACE ) ;;
+				\< ) OPEN+=( $ANGLE ) ;;
+				\) ) (( CHECK = PAREN )) ;;
+				\] ) (( CHECK = BRACK )) ;;
+				\} ) (( CHECK = BRACE )) ;;
+				\> ) (( CHECK = ANGLE )) ;;
+			esac
+			if (( CHECK )); then
+				if (( DEPTH == 0 || OPEN[-1] != CHECK )); then
+					(( SCORE = CHECK ))
+					break
+				fi
+				unset OPEN[-1]
+			fi
+			(( DEPTH = ${#OPEN[@]} ))
+		done
+		(( TOTALSCORE += SCORE ))
+		shift
+	done
+	echo "Total score $TOTALSCORE"
+}
+
+INPUT=( $(< input.txt ) )
+
+scoreerrors "${INPUT[@]}"
+

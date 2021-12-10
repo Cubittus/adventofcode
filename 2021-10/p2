@@ -1,0 +1,84 @@
+#!/bin/bash
+
+function qsort
+{
+	local -n LIST=$1
+	local -i LISTSIZE=${#LIST[@]}
+	(( LISTSIZE == 0 )) && return 0
+	local STACK=( 0 $((LISTSIZE-1)) )
+	local -i BEG END I PIV SM LG
+	while (( ${#STACK[@]} )); do
+		(( BEG = STACK[0] ))
+		(( END = STACK[1] ))
+		STACK=( "${STACK[@]:2}" )
+		SM=()
+		LG=()
+		(( PIV = LIST[BEG] ))
+		for (( I = BEG + 1 ; I <= END ; I++ )); do
+			if (( LIST[I] < PIV )); then
+				SM+=( ${LIST[I]} )
+			else
+				LG+=( ${LIST[I]} )
+			fi
+		done
+		LIST=( "${LIST[@]:0:BEG}" "${SM[@]}" $PIV "${LG[@]}" "${LIST[@]:END+1}" )
+		if (( ${#SM[@]} > 1 )); then
+			STACK+=( $BEG $(( BEG + ${#SM[@]} - 1 )) )
+		fi
+		if (( ${#LG[@]} > 1 )); then
+			STACK+=( $(( END - ${#LG[@]} + 1 )) $END )
+		fi
+	done
+}
+
+function scorecorrections
+{
+	(( PAREN = 1 ))
+	(( BRACK = 2 ))
+	(( BRACE = 3 ))
+	(( ANGLE = 4 ))
+	SCORELIST=()
+	while (( $# )); do
+		OPEN=()
+		(( DEPTH = 0 ))
+		(( LEN = ${#1} ))
+		(( SCORE = 0 ))
+		for (( I = 0 ; I < LEN ; I++ )); do
+			(( CHECK = 0 ))
+			case "${1:$I:1}" in
+				\( ) OPEN+=( $PAREN ) ;;
+				\[ ) OPEN+=( $BRACK ) ;;
+				\{ ) OPEN+=( $BRACE ) ;;
+				\< ) OPEN+=( $ANGLE ) ;;
+				\) ) (( CHECK = PAREN )) ;;
+				\] ) (( CHECK = BRACK )) ;;
+				\} ) (( CHECK = BRACE )) ;;
+				\> ) (( CHECK = ANGLE )) ;;
+			esac
+			if (( CHECK )); then
+				if (( DEPTH == 0 || OPEN[-1] != CHECK )); then
+					(( SCORE = CHECK ))
+					break
+				fi
+				unset OPEN[-1]
+			fi
+			(( DEPTH = ${#OPEN[@]} ))
+		done
+		if (( SCORE == 0 )); then
+			while (( ${#OPEN[@]} )); do
+				(( SCORE = SCORE * 5 + OPEN[-1] ))
+				unset OPEN[-1]
+			done
+			echo "Score $SCORE"
+			SCORELIST+=( $SCORE )
+		fi
+		shift
+	done
+	qsort SCORELIST
+	echo "Middle score ${SCORELIST[${#SCORELIST[@]}/2]}"
+}
+
+INPUT=( $(< input.txt ) )
+
+scorecorrections "${INPUT[@]}"
+
