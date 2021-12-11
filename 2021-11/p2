@@ -1,0 +1,95 @@
+#!/bin/bash
+
+FLASH=$'\e[100;93m'
+OCTOPUS='🐙'
+COLOFF=$'\e[0m'
+BG=$'\e[48;5;'
+FG=$'\e[38;5;'
+
+function printoctos
+{
+	for (( Y = 0 ; Y <= 9 ; Y++ )); do
+		for (( X = 0 ; X <= 9 ; X++ )); do
+			(( P = Y * 10 + X ))
+			if (( OCTO[P] == 0 )); then
+				printf "%s%s%s" "$FLASH" "$OCTOPUS" "$COLOFF"
+			else
+				printf "%s%s%s"  "$BG$((OCTO[P]+232))m$FG$((OCTO[P]+245))m" "${OCTO[P]} " "$COLOFF"
+			fi
+		done
+		echo
+	done
+	echo
+}
+
+function findsync
+{
+	OCTO=()
+	for (( Y = 0 ; Y <= 9 ; Y++ )); do
+		LINE=$1
+		for (( X = 0 ; X <= 9 ; X++ )); do
+			(( OCTO[Y*10+X] = ${LINE:X:1} ))
+		done
+		shift
+	done
+	printoctos
+	(( STEP = 0 ))
+	(( FLASHES = 0 ))
+	while (( FLASHES < 100 )); do
+		(( FLASHES = 0 ))
+		FLASHX=()
+		FLASHY=()
+		(( F = 0 ))
+		for (( Y = 0 ; Y <= 9 ; Y++ )); do
+			for (( X = 0 ; X <= 9 ; X++ )); do
+				(( P = Y * 10 + X ))
+				(( OCTO[P] ++ ))
+				if (( OCTO[P] > 9 )); then
+					(( OCTO[P] = 0 ))
+					(( FLASHX[F] = X ))
+					(( FLASHY[F] = Y ))
+					(( F++ ))
+				fi
+			done
+		done
+		(( FLASHES += F ))
+		while (( F )); do
+			(( F-- ))
+			(( X = FLASHX[F] ))
+			(( Y = FLASHY[F] ))
+			for (( DY = -1 ; DY <= 1 ; DY++ )); do
+				(( TY = Y + DY ))
+				if (( TY >= 0 && TY <= 9 )); then
+					for (( DX = -1 ; DX <= 1 ; DX++ )); do
+						(( TX = X + DX ))
+						if (( TX >= 0 && TX <= 9 )); then
+							(( P = TY * 10 + TX ))
+							if (( OCTO[P] > 0 )); then
+								(( OCTO[P] ++ ))
+								if (( OCTO[P] > 9 )); then
+									(( OCTO[P] = 0 ))
+									(( FLASHX[F] = TX ))
+									(( FLASHY[F] = TY ))
+									(( F++ ))
+									(( FLASHES++ ))
+								fi
+							fi
+						fi
+					done
+				fi
+			done
+		done
+		(( STEP++ ))
+		if (( STEP % 10 == 0 )); then
+			echo "Step $STEP"
+			printoctos
+		fi
+	done
+	echo "Step $STEP"
+	printoctos
+	echo "Total $STEP steps until sync"
+}
+
+INPUT=( $(< input.txt ) )
+
+findsync ${INPUT[@]}
