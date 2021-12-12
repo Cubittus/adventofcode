@@ -1,0 +1,57 @@
+#!/bin/bash
+
+function findroutes
+{
+	local HERE=${ROUTE[-1]}
+	local -n EXITS=EXIT_$HERE
+	for EXIT in $EXITS ; do
+		if [[ $EXIT == 'end' ]]; then
+			echo "Found route ${ROUTE[@]} end"
+			(( NUMROUTES++ ))
+			continue
+		else
+			if [[ $EXIT =~ ^[a-z]+$ ]]; then
+				if [[ " ${ROUTE[*]} " =~ " $EXIT " ]]; then
+					if [[ " ${ROUTE[*]} " =~ " 2 " ]]; then
+						continue
+					else
+						ROUTE+=( 2 )
+					fi
+				fi
+			fi
+			ROUTE+=( $EXIT )
+			findroutes
+		fi
+	done
+	unset ROUTE[-1]
+	if (( ${#ROUTE[@]} )) && [[ "${ROUTE[-1]}" == "2" ]]; then
+		unset ROUTE[-1]
+	fi
+}
+
+function countpaths
+{
+	while (( $# )); do
+		FROM=${1%-*}
+		TO=${1#*-}
+		if [[ $FROM != 'end' && $TO != 'start' ]]; then
+			declare EXIT_$FROM+="$TO "
+		fi
+		if [[ $FROM != 'start' && $TO != 'end' ]]; then
+			declare EXIT_$TO+="$FROM "
+		fi
+		shift
+	done
+	for LINKVAR in ${!EXIT_@}; do
+		declare -n LINK=$LINKVAR
+		echo $LINKVAR = $LINK
+	done
+	(( NUMROUTES = 0 ))
+	ROUTE=( start )
+	findroutes
+	echo "Found $NUMROUTES routes"
+}
+
+INPUT=( $(< input.txt ) )
+
+countpaths ${INPUT[@]}
