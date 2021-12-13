@@ -1,0 +1,96 @@
+#!/bin/bash
+
+SPACE='⚪'
+DOT='⚫'
+
+function printpaper
+{
+	local -i X Y
+	echo "Paper is $WIDTH x $HEIGHT and has ${#PAPER[@]} dots"
+	(( WIDTH > 175 || HEIGHT > 90 )) && return
+	for (( Y = 0; Y <= HEIGHT ; Y++ )); do
+		for (( X = 0; X <= WIDTH ; X++ )); do
+			(( PAPER[$X,$Y] )) && echo -n "$DOT" || echo -n "$SPACE"
+		done
+		echo
+	done
+}
+
+function foldleft
+{
+	if (( POS * 2 != WIDTH )); then
+		echo "Fold left is not in middle!"
+		exit 1
+	fi
+	declare -A FOLDED=()
+	for XY in ${!PAPER[@]}; do
+		(( X = ${XY%,*} ))
+		(( Y = ${XY#*,} ))
+		if (( X < POS )); then
+			(( X = POS - X - 1 ))
+		elif (( X > POS )); then
+			(( X = X - POS - 1 ))
+		else
+			echo "Dot on fold at $XY folding left"
+			exit 1
+		fi
+		FOLDED[$X,$Y]=1
+	done
+	eval PAPER=\( ${FOLDED[@]@K} \)
+	(( WIDTH = POS - 1 ))
+}
+
+function foldup
+{
+	if (( POS * 2 != HEIGHT )); then
+		echo "Fold up is not in middle!"
+		exit 1
+	fi
+	declare -A FOLDED=()
+	for XY in ${!PAPER[@]}; do
+		(( X = ${XY%,*} ))
+		(( Y = ${XY#*,} ))
+		if (( Y > POS )); then
+			(( Y = HEIGHT - Y ))
+		elif (( Y == POS )); then
+			echo "Dot on fold at $XY folding up"
+			exit 1
+		fi
+		FOLDED[$X,$Y]=1
+	done
+	eval PAPER=\( ${FOLDED[@]@K} \)
+	(( HEIGHT = POS - 1 ))
+}
+
+function fold
+{
+	(( WIDTH = 0 ))
+	(( HEIGHT = 0 ))
+	declare -A PAPER=()
+	while [[ $1 != fold ]]; do
+		(( X = ${1%,*} ))
+		(( Y = ${1#*,} ))
+		(( X > WIDTH )) && (( WIDTH = X ))
+		(( Y > HEIGHT )) && (( HEIGHT = Y ))
+		PAPER[$X,$Y]=1
+		shift
+	done
+	printpaper
+	while (( $# >= 3 )); do
+		DIR=${3%=*}
+		(( POS = ${3#[xy]=} ))
+		if [[ $DIR == 'x' ]]; then
+			echo "Vertical fold at X = $POS"
+			foldleft
+		else
+			echo "Horizontal fold at Y = $POS"
+			foldup
+		fi
+		printpaper
+		shift 3
+	done
+}
+
+INPUT=( $(< input.txt ) )
+
+fold ${INPUT[@]}
