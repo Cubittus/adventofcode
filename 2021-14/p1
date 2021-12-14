@@ -1,0 +1,56 @@
+#!/bin/bash
+
+function printstep
+{
+	printf "Step %2d : " $STEP
+	if (( ${#CHAIN} < 150 )); then
+		printf "%s %d chars\n" $CHAIN ${#CHAIN}
+	else
+		printf "%s...%s %d chars\n" ${CHAIN:0:70} ${CHAIN: -70} ${#CHAIN}
+	fi
+}
+
+function countchars
+{
+	local -i I
+	local -A CHARS=()
+	for (( I = 0 ; I < ${#CHAIN} ; I++ )); do
+		(( CHARS[${CHAIN:I:1}]++ ))
+	done
+	local -i MINSCORE=$(( 10**9 )) MAXSCORE=0
+	for C in ${!CHARS[@]}; do
+		printf "Char %s occurs %6d times\n" $C ${CHARS[$C]}
+		(( CHARS[$C] < MINSCORE)) && (( MINSCORE = CHARS[$C] ))
+		(( CHARS[$C] > MAXSCORE)) && (( MAXSCORE = CHARS[$C] ))
+	done
+	printf "Max score - Min score = %d - %d = %d\n" $MAXSCORE $MINSCORE $(( MAXSCORE - MINSCORE ))
+}
+
+function polymerise
+{
+	CHAIN="$1"
+	shift
+	declare -A RULE=()
+	while (( $# >= 3 )); do
+		RULE[$1]=$3
+		shift 3
+	done
+	(( STEP = 0 ))
+	while (( STEP < 10 )); do
+		printstep
+		NEWCHAIN=""
+		for (( I = 0 ; I < ${#CHAIN} - 1 ; I++ )); do
+			NEWCHAIN+=${CHAIN:I:1}${RULE[${CHAIN:I:2}]}
+		done
+		NEWCHAIN+=${CHAIN: -1}
+		CHAIN=$NEWCHAIN
+		(( STEP ++ ))
+	done
+	printstep
+	countchars
+}
+
+INPUT=( $(< input.txt ) )
+
+polymerise "${INPUT[@]}"
+

@@ -20,7 +20,7 @@ function calcfuel
 function crabalign
 {
 	CRAB=()
-	(( MINPOS = 1**9 ))
+	(( MINPOS = 10**9 ))
 	(( MAXPOS = 0 ))
 	(( SUM = 0 ))
 	(( COUNT = 0 ))

@@ -1,0 +1,71 @@
+#!/bin/bash
+
+function printstep
+{
+	local PAIR CHAR
+	local -i NP=0 NC=0
+	printf "Step %2d : " $STEP
+	for PAIR in ${!PAIRS[@]}; do
+		printf "%s x %d  " $PAIR ${PAIRS[$PAIR]}
+		(( NP += PAIRS[$PAIR] ))
+	done
+	echo -n ":  "
+	for CHAR in ${!CHARS[@]}; do
+		printf "%s x %d  " $CHAR ${CHARS[$CHAR]}
+		(( NC += CHARS[$CHAR] ))
+	done
+	printf ": Len %d == %s\n" $(( NP + 1 )) $NC
+}
+
+function printscore
+{
+	local -i MINSCORE=$(( 10**30 )) MAXSCORE=0
+	local C
+	for C in ${!CHARS[@]}; do
+		printf "Char %s occurs %6d times\n" $C ${CHARS[$C]}
+		(( CHARS[$C] < MINSCORE)) && (( MINSCORE = CHARS[$C] ))
+		(( CHARS[$C] > MAXSCORE)) && (( MAXSCORE = CHARS[$C] ))
+	done
+	printf "Max score - Min score = %d - %d = %d\n" $MAXSCORE $MINSCORE $(( MAXSCORE - MINSCORE ))
+}
+
+function polymerise
+{
+	CHAIN="$1"
+	shift
+	declare -A PAIRS=() CHARS=()
+	for (( I = 0 ; I < ${#CHAIN} - 1 ; I++ )); do
+		(( PAIRS[${CHAIN:I:2}] ++ ))
+		(( CHARS[${CHAIN:I:1}] ++ ))
+	done
+	(( CHARS[${CHAIN: -1}] ++ ))
+	declare -A RULE=()
+	while (( $# >= 3 )); do
+		RULE[$1]=$3
+		shift 3
+	done
+	declare -A NEWPAIRS=()
+	(( STEP = 0 ))
+	printstep
+	while (( STEP < 40 )); do
+		NEWPAIRS=()
+		for PAIR in ${!PAIRS[@]}; do
+			C1=${PAIR:0:1}
+			C2=${PAIR:1:1}
+			CA=${RULE[$PAIR]}
+			(( NUM = PAIRS[$PAIR] ))
+			(( NEWPAIRS[$C1$CA] += NUM ))
+			(( NEWPAIRS[$CA$C2] += NUM ))
+			(( CHARS[$CA] += NUM ))
+		done
+		eval PAIRS=\( ${NEWPAIRS[@]@K} \)
+		(( STEP ++ ))
+		printstep
+	done
+	printscore
+}
+
+INPUT=( $(< input.txt ) )
+
+polymerise "${INPUT[@]}"
+
