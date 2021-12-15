@@ -1,0 +1,80 @@
+#!/bin/bash
+
+function findpath
+{
+	CAVE=""
+	(( SIZE = ${#1} ))
+	while (( $# )); do
+		CAVE+=$1
+		shift
+	done
+	if (( SIZE ** 2 != ${#CAVE} )); then
+		echo "Not square SIZE=$SIZE CAVE=${#CAVE}"
+		echo $CAVE
+		exit 1
+	fi
+	declare -a RISK=()
+	(( MAXRISK = SIZE * SIZE * 10 ))
+	for (( Y = 0 ; Y < SIZE ; Y++ )); do
+		for (( X = 0 ; X < SIZE ; X++ )); do
+			(( RISK[Y*SIZE+X] = MAXRISK ))
+		done
+	done
+	(( RISK[0] = 0 ))
+	declare -a QX=( 0 ) QY=( 0 ) VISITED
+	(( QS = 0 ))
+	(( QE = 1 ))
+	(( LOGINT = SIZE * SIZE / 40 ))
+	while (( QE > QS )); do
+		(( X = QX[QS] ))
+		(( Y = QY[QS] ))
+		(( QS++ ))
+		(( POS = Y * SIZE + X ))
+		(( VISITED[POS] = 1 ))
+		if (( X > 0 )); then
+			(( RPOS = POS - 1 ))
+			if (( ! VISITED[RPOS] && RISK[RPOS] > RISK[POS] + ${CAVE:RPOS:1} )); then
+				(( QX[QE] = X - 1 ))
+				(( QY[QE] = Y ))
+				(( QE++ ))
+				(( RISK[RPOS] = RISK[POS] + ${CAVE:RPOS:1} ))
+			fi
+		fi
+		if (( X < SIZE - 1 )); then
+			(( RPOS = POS + 1 ))
+			if (( ! VISITED[RPOS] && RISK[RPOS] > RISK[POS] + ${CAVE:RPOS:1} )); then
+				(( QX[QE] = X + 1 ))
+				(( QY[QE] = Y ))
+				(( QE++ ))
+				(( RISK[RPOS] = RISK[POS] + ${CAVE:RPOS:1} ))
+			fi
+		fi
+		if (( Y > 0 )); then
+			(( RPOS = POS - SIZE ))
+			if (( ! VISITED[RPOS] && RISK[RPOS] > RISK[POS] + ${CAVE:RPOS:1} )); then
+				(( QX[QE] = X ))
+				(( QY[QE] = Y - 1 ))
+				(( QE++ ))
+				(( RISK[RPOS] = RISK[POS] + ${CAVE:RPOS:1} ))
+			fi
+		fi
+		if (( Y < SIZE - 1 )); then
+			(( RPOS = POS + SIZE ))
+			if (( ! VISITED[RPOS] && RISK[RPOS] > RISK[POS] + ${CAVE:RPOS:1} )); then
+				(( QX[QE] = X ))
+				(( QY[QE] = Y + 1 ))
+				(( QE++ ))
+				(( RISK[RPOS] = RISK[POS] + ${CAVE:RPOS:1} ))
+			fi
+		fi
+		if (( QS % LOGINT == 0 )); then
+			echo "At $X , $Y : Risk ${RISK[POS]} : Done $QS : Queue $((QE - QS))"
+		fi
+	done
+	echo "At $X , $Y : Risk ${RISK[POS]} : Done $QS : Queue $((QE - QS))"
+	echo "Route Risk = ${RISK[SIZE*SIZE-1]}"
+}
+
+INPUT=( $(<input.txt) )
+
+findpath ${INPUT[@]}

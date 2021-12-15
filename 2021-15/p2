@@ -1,0 +1,116 @@
+#!/bin/bash
+
+function findpath
+{
+	CAVE=""
+	(( SIZE = ${#1} ))
+	INC1=( 0 2 3 4 5 6 7 8 9 1 )
+	INC2=( 0 3 4 5 6 7 8 9 1 2 )
+	INC3=( 0 4 5 6 7 8 9 1 2 3 )
+	INC4=( 0 5 6 7 8 9 1 2 3 4 )
+	while (( $# )); do
+		LINE=$1
+		LINE1="" LINE2="" LINE3="" LINE4=""
+		for (( X = 0 ; X < SIZE ; X++ )); do
+			C=${LINE:X:1}
+			LINE1+=${INC1[C]}
+			LINE2+=${INC2[C]}
+			LINE3+=${INC3[C]}
+			LINE4+=${INC4[C]}
+		done
+		CAVE+=$LINE$LINE1$LINE2$LINE3$LINE4
+		shift
+	done
+	BLOCK1=""
+	BLOCK2=""
+	BLOCK3=""
+	BLOCK4=""
+	for (( P = 0 ; P < SIZE * SIZE * 5 ; P++ )); do
+		C=${CAVE:P:1}
+		BLOCK1+=${INC1[C]}
+		BLOCK2+=${INC2[C]}
+		BLOCK3+=${INC3[C]}
+		BLOCK4+=${INC4[C]}
+	done
+	CAVE+=$BLOCK1$BLOCK2$BLOCK3$BLOCK4
+	(( SIZE = SIZE * 5 ))
+	if (( SIZE ** 2 != ${#CAVE} )); then
+		echo "Not square SIZE=$SIZE CAVE=${#CAVE}"
+		echo $CAVE
+		exit 1
+	fi
+	declare -a RISK=() NEW=()
+	(( MAXRISK = SIZE * SIZE * 10 ))
+	for (( Y = 0 ; Y < SIZE ; Y++ )); do
+		for (( X = 0 ; X < SIZE ; X++ )); do
+			(( POS = Y * SIZE + X ))
+			(( RISK[POS] = MAXRISK ))
+			(( NEW[POS] = 1 ))
+		done
+	done
+	declare -a CHECK=()
+	(( END = SIZE - 1 ))
+	(( LASTPOS = SIZE * SIZE - 1 ))
+	(( POS = 0 ))
+	(( RISK[POS] = 0 ))
+	(( MAXDIST = 0 ))
+	echo "Mapping risk"
+	while (( POS != LASTPOS )); do
+		(( X = POS % SIZE ))
+		(( Y = POS / SIZE ))
+		if (( X + Y > MAXDIST )); then
+			echo "At $X , $Y : Distance $((X+Y)) : Risk ${RISK[POS]} : New ${#NEW[@]} : Check ${#CHECK[@]}"
+			(( MAXDIST = X + Y ))
+		fi
+		if (( X > 0 )); then
+			(( RPOS = POS - 1 ))
+			if (( NEW[RPOS] )); then
+				(( CHECK[RPOS] = 1 ))
+				if (( RISK[RPOS] > RISK[POS] + ${CAVE:RPOS:1} )); then
+					(( RISK[RPOS] = RISK[POS] + ${CAVE:RPOS:1} ))
+				fi
+			fi
+		fi
+		if (( X < END )); then
+			(( RPOS = POS + 1 ))
+			if (( NEW[RPOS] )); then
+				(( CHECK[RPOS] = 1 ))
+				if (( RISK[RPOS] > RISK[POS] + ${CAVE:RPOS:1} )); then
+					(( RISK[RPOS] = RISK[POS] + ${CAVE:RPOS:1} ))
+				fi
+			fi
+		fi
+		if (( Y > 0 )); then
+			(( RPOS = POS - SIZE ))
+			if (( NEW[RPOS] )); then
+				(( CHECK[RPOS] = 1 ))
+				if (( RISK[RPOS] > RISK[POS] + ${CAVE:RPOS:1} )); then
+					(( RISK[RPOS] = RISK[POS] + ${CAVE:RPOS:1} ))
+				fi
+			fi
+		fi
+		if (( Y < END )); then
+			(( RPOS = POS + SIZE ))
+			if (( NEW[RPOS] )); then
+				(( CHECK[RPOS] = 1 ))
+				if (( RISK[RPOS] > RISK[POS] + ${CAVE:RPOS:1} )); then
+					(( RISK[RPOS] = RISK[POS] + ${CAVE:RPOS:1} ))
+				fi
+			fi
+		fi
+		unset NEW[POS]
+		unset CHECK[POS]
+		(( MINRISK = MAXRISK ))
+		for CPOS in ${!CHECK[@]}; do
+			if (( ( RISK[CPOS] < MINRISK ) && NEW[CPOS] )); then
+				(( MINRISK = RISK[CPOS] ))
+				(( POS = CPOS ))
+			fi
+		done
+	done
+	echo "Route Risk = ${RISK[SIZE*SIZE-1]}"
+}
+
+INPUT=( $(<input.txt) )
+
+findpath ${INPUT[@]}
