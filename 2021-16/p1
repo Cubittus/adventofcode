@@ -1,0 +1,86 @@
+#!/bin/bash
+
+function decho
+{
+	printf "%$((DEPTH*3))s" ' '
+	echo "$@"
+}
+
+function decodepacket
+{
+	(( DEPTH++ ))
+	local -i START=$1
+	local -i POS=$START
+	local -i PVER="2#${BIN:POS:3}" PTYPE="2#${BIN:POS+3:3}"
+	decho "Packet ver $PVER type $PTYPE"
+	(( VERSIONTOTAL += PVER ))
+	(( POS += 6 ))
+	case $PTYPE in
+		4 )
+			local -i NUM=0
+			while (( POS < END )); do
+				(( NUM += "2#${BIN:POS+1:4}" ))
+				(( POS += 5 ))
+				if (( ${BIN:POS-5:1} == 0 )); then
+					break
+				fi
+				(( NUM = NUM * 16 ))
+			done
+			decho "Literal number $NUM"
+			;;
+		* )
+			local -i LENTYPE=${BIN:POS:1} LENGTH=0 COUNT=0 SPOS=0 NUM=0
+			if (( LENTYPE == 0 )); then
+				LENGTH="2#${BIN:POS+1:15}"
+				(( POS += 16 ))
+				decho "Operator subpacket length $LENGTH"
+				while (( SPOS < $LENGTH )); do
+					decodepacket $((POS + SPOS))
+					(( SPOS += PACKETLENGTH ))
+				done
+			else
+				COUNT="2#${BIN:POS+1:11}"
+				(( POS += 12 ))
+				decho "Operator subpacket count $COUNT"
+				while (( NUM < COUNT )); do
+					decodepacket $((POS + SPOS))
+					(( SPOS += PACKETLENGTH ))
+					(( NUM++ ))
+				done
+			fi
+			(( POS += SPOS ))
+			;;
+	esac
+	(( PACKETLENGTH = POS - START ))
+	decho "Packet length $PACKETLENGTH"
+	(( DEPTH-- ))
+}
+
+function decode
+{
+	MESSAGE=$1
+	BIN=""
+	(( LEN = ${#1} ))
+	BITS=( 0000 0001 0010 0011 0100 0101 0110 0111 1000 1001 1010 1011 1100 1101 1110 1111 )
+	for (( I = 0; I < LEN ; I++ )); do
+		BIN+=${BITS[16#${MESSAGE:I:1}]}
+	done
+	echo "$LEN : $MESSAGE : $BIN"
+	(( END = LEN * 4 ))
+	(( DEPTH = 0 ))
+	(( VERSIONTOTAL = 0 ))
+	decodepacket 0
+	echo "Total of all versions = $VERSIONTOTAL"
+}
+
+INPUT=( $(< input.txt ) )
+#INPUT=( "D2FE28" )
+#INPUT=( "38006F45291200" )
+#INPUT=( "EE00D40C823060" )
+#INPUT=( "8A004A801A8002F478" )
+#INPUT=( "620080001611562C8802118E34" )
+#INPUT=( "C0015000016115A2E0802F182340" )
+#INPUT=( "A0016C880162017C3686B18A3D4780" )
+
+decode ${INPUT[@]}
+

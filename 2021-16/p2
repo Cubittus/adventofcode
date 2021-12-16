@@ -1,0 +1,128 @@
+#!/bin/bash
+
+function decho
+{
+	printf "%$((DEPTH*3))s" ' '
+	echo "$@"
+}
+
+function decodepacket
+{
+	(( DEPTH++ ))
+	local -i START=$1
+	local -i POS=$START
+	local -i PVER="2#${BIN:POS:3}" PTYPE="2#${BIN:POS+3:3}"
+	#decho "Packet ver $PVER type $PTYPE"
+	(( POS += 6 ))
+	case $PTYPE in
+		4 )
+			local -i NUM=0
+			while (( POS < END )); do
+				(( NUM += "2#${BIN:POS+1:4}" ))
+				(( POS += 5 ))
+				if (( ${BIN:POS-5:1} == 0 )); then
+					break
+				fi
+				(( NUM = NUM * 16 ))
+			done
+			#decho "Literal number $NUM"
+			PACKETVALUE=$NUM
+			;;
+		* )
+			local -i LENTYPE=${BIN:POS:1} LENGTH=0 COUNT=0 SPOS=0 NUM=0
+			local -a -i ARG=()
+			if (( LENTYPE == 0 )); then
+				LENGTH="2#${BIN:POS+1:15}"
+				(( POS += 16 ))
+				#decho "Operator subpacket length $LENGTH"
+				while (( SPOS < $LENGTH )); do
+					decodepacket $((POS + SPOS))
+					(( SPOS += PACKETLENGTH ))
+					ARG+=( $PACKETVALUE )
+				done
+			else
+				COUNT="2#${BIN:POS+1:11}"
+				(( POS += 12 ))
+				#decho "Operator subpacket count $COUNT"
+				while (( NUM < COUNT )); do
+					decodepacket $((POS + SPOS))
+					(( SPOS += PACKETLENGTH ))
+					ARG+=( $PACKETVALUE )
+					(( NUM++ ))
+				done
+			fi
+			(( POS += SPOS ))
+			local -i RESULT=0 A
+			case $PTYPE in
+				0 ) decho "Sum ${ARG[@]}"
+					for A in ${ARG[@]}; do
+						(( RESULT += A ));
+					done
+					;;
+				1 ) decho "Product ${ARG[@]}"
+					(( RESULT = 1 ))
+					for A in ${ARG[@]}; do
+						(( RESULT *= A ));
+					done
+					;;
+				2 ) decho "Min ${ARG[@]}"
+					(( RESULT = ARG[0] ))
+					for A in ${ARG[@]:1}; do
+						(( RESULT = ( A < RESULT ) ? A : RESULT ))
+					done
+					;;
+				3 ) decho "Max ${ARG[@]}"
+					(( RESULT = ARG[0] ))
+					for A in ${ARG[@]:1}; do
+						(( RESULT = ( A > RESULT ) ? A : RESULT ))
+					done
+					;;
+				5 ) decho "Test ${ARG[0]} > ${ARG[1]}"
+					(( RESULT = ( ARG[0] > ARG[1] ) ))
+					;;
+				6 ) decho "Test ${ARG[0]} < ${ARG[1]}"
+					(( RESULT = ( ARG[0] < ARG[1] ) ))
+					;;
+				7 ) decho "Test ${ARG[0]} = ${ARG[1]}"
+					(( RESULT = ( ARG[0] == ARG[1] ) ))
+					;;
+			esac
+			PACKETVALUE=$RESULT
+			;;
+	esac
+	(( PACKETLENGTH = POS - START ))
+	decho "Packet value $PACKETVALUE"
+	(( DEPTH-- ))
+}
+
+function decode
+{
+	MESSAGE=$1
+	BIN=""
+	(( LEN = ${#1} ))
+	BITS=( 0000 0001 0010 0011 0100 0101 0110 0111 1000 1001 1010 1011 1100 1101 1110 1111 )
+	for (( I = 0; I < LEN ; I++ )); do
+		BIN+=${BITS[16#${MESSAGE:I:1}]}
+	done
+	#echo "$LEN : $MESSAGE : $BIN"
+	(( END = LEN * 4 ))
+	(( DEPTH = 0 ))
+	decodepacket 0
+}
+
+function runtests
+{
+	P2TESTS=( C200B40A82 04005AC33890 880086C3E88112 CE00C43D881120 D8005AC2A8F0 F600BC2D8F 9C005AC2F8F0 9C0141080250320F1802104A08 )
+	for T in ${P2TESTS[@]} ; do
+		decode $T
+		echo
+		echo
+	done
+	return 1
+}
+
+#runtests || exit
+
+INPUT=( $(< input.txt ) )
+decode ${INPUT[@]}
+
