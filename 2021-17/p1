@@ -1,0 +1,48 @@
+#!/bin/bash
+
+function fireprobe
+{
+	XR=${3#x=}
+	XR=${XR%,}
+	(( XMIN = ${XR%..*} ))
+	(( XMAX = ${XR#*..} ))
+	YR=${4#y=}
+	(( YMIN = ${YR%..*} ))
+	(( YMAX = ${YR#*..} ))
+	echo "Target  X $XMIN - $XMAX  Y $YMIN - $YMAX"
+
+	(( DX = 1 ))
+	(( DXMAX = 1 ))
+	while (( DXMAX <= XMAX )); do
+		(( DX++ ))
+		(( DXMAX = DX * ( DX + 1 ) / 2 ))
+	done
+	(( DX-- ))
+	(( DXMAX = DX * ( DX + 1 ) / 2 ))
+	echo "Best delta X = $DX reaches $DXMAX"
+	(( FDX = DX ))
+	for (( FDY = 1 ; FDY < 1000 ; FDY++ )); do
+		(( X = 0 ))
+		(( Y = 0 ))
+		(( DX = FDX ))
+		(( DY = FDY ))
+		(( STEPS = 0 ))
+		(( PEAKY = 0 ))
+		while (( Y > YMAX )); do
+			(( X += DX ))
+			(( Y += DY ))
+			(( PEAKY = ( Y > PEAKY ) ? Y : PEAKY ))
+			(( DX = ( DX > 0 ) ? DX - 1 : 0 ))
+			(( DY-- ))
+			(( STEPS++ ))
+		done
+		if (( Y >= YMIN )); then
+			echo "Delta Y $FDY reaches $X , $Y after $STEPS steps with peak at $PEAKY"
+		fi
+	done
+}
+
+INPUT=( $(< input.txt ) )
+
+fireprobe ${INPUT[@]}
+

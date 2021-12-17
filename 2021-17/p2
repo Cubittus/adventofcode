@@ -1,0 +1,50 @@
+#!/bin/bash
+
+function fireprobe
+{
+	XR=${3#x=}
+	XR=${XR%,}
+	(( XMIN = ${XR%..*} ))
+	(( XMAX = ${XR#*..} ))
+	YR=${4#y=}
+	(( YMIN = ${YR%..*} ))
+	(( YMAX = ${YR#*..} ))
+	echo "Target  X $XMIN - $XMAX  Y $YMIN - $YMAX"
+
+	(( DXMAX = XMAX ))
+	(( DYMIN = YMIN ))
+	(( DYMAX = 200 ))
+
+	echo "Checking range 1 - $DXMAX , $DYMIN - $DYMAX"
+
+	declare -A VALIDFD=()
+	for (( FDY = DYMIN ; FDY <= DYMAX ; FDY++ )); do
+		for (( FDX = 1 ; FDX <= DXMAX ; FDX++ )); do
+			(( DX = FDX ))
+			(( DY = FDY ))
+			(( X = 0 ))
+			(( Y = 0 ))
+			(( STEPS = 0 ))
+			while (( X <= XMAX && Y >= YMIN )); do
+				(( PX = X ))
+				(( PY = Y ))
+				(( X += DX ))
+				(( Y += DY ))
+				(( DX = ( DX > 0 ) ? DX - 1 : 0 ))
+				(( DY-- ))
+				(( STEPS++ ))
+			done
+			if (( PX >= XMIN && PY <= YMAX )); then
+				(( STEPS-- ))
+				(( VALIDFD[$FDX,$FDY]=STEPS ))
+				echo "Delta $FDX , $FDY hits after $STEPS steps at $PX , $PY"
+			fi
+		done
+	done
+	echo "Total valid deltas = ${#VALIDFD[@]}"
+}
+
+INPUT=( $(< input.txt ) )
+
+fireprobe ${INPUT[@]}
+
