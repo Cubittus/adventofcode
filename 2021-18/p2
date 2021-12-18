@@ -1,0 +1,151 @@
+#!/bin/bash
+
+function log
+{
+	printf "%15s : %s\n" "$1" "$2"
+}
+
+function fishsum
+{
+	SUM="[$1,$2]"
+}
+
+function fishexplode
+{
+	#log "Explode at $1" "${SUM:0:$1} | ${SUM:$1:5} | ${SUM:$1+5}"
+	local -i XPOS=$1 NI NW NN SUMLEN=${#SUM}
+	local -i XNL XNR XLEN=5
+	(( NI = XPOS + 1 ))
+	(( NW = 1 ))
+	if [[ ${SUM:NI+1:1} =~ [0-9] ]]; then
+		(( NW++ ))
+		(( XLEN++ ))
+	fi
+	(( XNL = ${SUM:NI:NW} ))
+	(( NI += NW + 1 ))
+	(( NW = 1 ))
+	if [[ ${SUM:NI+1:1} =~ [0-9] ]]; then
+		(( NW++ ))
+		(( XLEN++ ))
+	fi
+	(( XNR = ${SUM:NI:NW} ))
+	for (( NI = XPOS + XLEN ; NI < SUMLEN ; NI++ )); do
+		if [[ ${SUM:NI:1} =~ [0-9] ]]; then
+			(( NW = 1 ))
+			if [[ ${SUM:NI+1:1} =~ [0-9] ]]; then
+				(( NW++ ))
+			fi
+			(( NN = ${SUM:NI:NW} + XNR ))
+			SUM="${SUM:0:NI}$NN${SUM:NI+NW}"
+			break
+		fi
+	done
+	SUM="${SUM:0:XPOS}0${SUM:XPOS+XLEN}"
+	for (( NI = XPOS - 1 ; NI > 0 ; NI-- )); do
+		if [[ ${SUM:NI:1} =~ [0-9] ]]; then
+			(( NW = 1 ))
+			if [[ ${SUM:NI-1:1} =~ [0-9] ]]; then
+				(( NI-- ))
+				(( NW = 2 ))
+			fi
+			(( NN = ${SUM:NI:NW} + XNL ))
+			SUM="${SUM:0:NI}$NN${SUM:NI+NW}"
+			break;
+		fi
+	done
+}
+
+function fishsplit
+{
+	#log "Split at $1" "${SUM:0:$1} | ${SUM:$1:2} | ${SUM:$1+2}"
+	local -i SPOS=$1
+	local -i SN=${SUM:SPOS:2}
+	SUM="${SUM:0:SPOS}[$(( SN / 2)),$(( ( SN + 1 ) / 2 ))]${SUM:SPOS+2}"
+}
+
+function fishreduce
+{
+	local -i I LEN=${#SUM} LEVEL REDUCABLE=1
+	#log "Reducing" "$SUM"
+	while (( REDUCABLE )); do
+		(( LEVEL = 0 ))
+		for (( I = 0 ; I < LEN ; I++ )); do
+			if [[ ${SUM:I:1} == '[' ]]; then
+				(( LEVEL++ ))
+			elif [[ ${SUM:I:1} == ']' ]]; then
+				(( LEVEL-- ))
+			fi
+			if (( LEVEL > 4 )); then
+				fishexplode $I
+				break
+			fi
+		done
+		if (( I < LEN )); then
+			continue
+		fi
+		for (( I = 0 ; I < LEN - 1 ; I++ )); do
+			if [[ ${SUM:I:1} =~ [0-9] ]]; then
+				if [[ ${SUM:I+1:1} =~ [0-9] ]]; then
+					fishsplit $I
+					break
+				fi
+			fi
+		done
+		if (( I < LEN - 1 )); then
+			continue
+		fi
+		REDUCABLE=0
+		#log "Reduced" "$SUM"
+	done
+}
+
+function calcmagnitude
+{
+	while [[ "$SUM" =~ ^(.*)\[([0-9]+),([0-9]+)\](.*)$ ]]; do
+		SUM="${BASH_REMATCH[1]}$(( 3 * BASH_REMATCH[2] + 2 * BASH_REMATCH[3] ))${BASH_REMATCH[4]}"
+	done
+	#log "Magnitude" $SUM
+}
+
+function addfishnumbers
+{
+	SUM="$1"
+	fishreduce
+	shift
+	while (( $# )); do
+		fishsum "$SUM" "$1"
+		fishreduce
+		shift
+	done
+	log "Result" "$SUM"
+	calcmagnitude
+}
+
+function findlargestmagpair
+{
+	VALUES=( "$@" )
+	COUNT=${#VALUES[@]}
+	(( MAXMAG = 0 ))
+	for (( J = 0 ; J < COUNT ; J++ )); do
+		for (( I = 0 ; I < COUNT ; I++ )); do
+			(( I == J )) && continue
+			fishsum "${VALUES[J]}" "${VALUES[I]}"
+			fishreduce
+			REDSUM="$SUM"
+			calcmagnitude
+			if (( SUM > MAXMAG )); then
+				(( MAXMAG = SUM ))
+				log "Taking" "${VALUES[J]}"
+				log "Adding" "${VALUES[I]}"
+				log "Sum" "$REDSUM"
+				log "Magnitude" $SUM
+			fi
+		done
+		log "Completed" "$J / $COUNT ($(( J * 100 / COUNT ))%)"
+	done
+}
+
+INPUT=( $(< input.txt ) )
+
+findlargestmagpair "${INPUT[@]}"
+
