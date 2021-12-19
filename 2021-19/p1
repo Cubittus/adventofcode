@@ -1,0 +1,177 @@
+#!/bin/bash
+
+function builddistmap
+{
+	local -n SDM=$1 SBC=$2 SBX=$3 SBY=$4 SBZ=$5
+	declare -g -a -i SDM=()
+	local -i I J
+	for (( I = 0 ; I < SBC ; I++ )); do
+		for (( J = 0 ; J < SBC ; J++ )); do
+			(( SDM[I*SBC+J] = ( SBX[J] - SBX[I] ) ** 2 + ( SBY[J] - SBY[I] ) ** 2 + ( SBZ[J] - SBZ[I] ) ** 2 ))
+		done
+	done
+}
+
+function findmapmatches
+{
+	local -i MI MJ SI SJ
+	for (( MI = 0 ; MI < MAPPEDCOUNT ; MI++ )); do
+		for (( MJ = MI + 1 ; MJ < MAPPEDCOUNT ; MJ++ )); do
+			for (( SI = 0 ; SI < SCANNERCOUNT ; SI++ )); do
+				for (( SJ = SI + 1 ; SJ < SCANNERCOUNT ; SJ++ )); do
+					if (( MAPPEDDIST[MI*MAPPEDCOUNT+MJ] == SCANNERDIST[SI*SCANNERCOUNT+SJ] )); then
+						#echo "Map $MI - $MJ dist = Scan $SI - $SJ dist = ${SCANNERDIST[SI*SCANNERCOUNT+SJ]}"
+						(( MAPDISTMATCH[DISTMATCHCOUNT] = MI * MAPPEDCOUNT + MJ ))
+						(( SDISTMATCH[DISTMATCHCOUNT] = SI * SCANNERCOUNT + SJ ))
+						(( DISTMATCHCOUNT++ ))
+					fi
+				done
+			done
+		done
+	done
+}
+
+function coords
+{
+	local -n X=${1}X Y=${1}Y Z=${1}Z
+	local I=$2
+	printf "%2d @ < %4d , %4d , %4d >" $I ${X[I]} ${Y[I]} ${Z[I]}
+}
+
+function mapbeacons
+{
+	(( NUMSCANNERS = 0 ))
+	(( SI = 0 ))
+	while (( $# > 5 )); do
+		if [[ "$1 $2 $3 $4" != "--- scanner $SI ---" ]]; then
+			echo "Parsing failed at : $1 $2 $3 $4"
+			exit 1
+		fi
+		shift 4
+		declare -n SBX="SCANNER${SI}BEACONX"
+		declare -n SBY="SCANNER${SI}BEACONY"
+		declare -n SBZ="SCANNER${SI}BEACONZ"
+		declare -n SCANNERCOUNT="SCANNER${SI}COUNT"
+		declare -a -i SBX=() SBY=() SBZ=()
+		declare -i SCANNERCOUNT=0
+		(( BI = 0 ))
+		while [[ "$1" =~ ^([-0-9]+),([-0-9]+),([-0-9]+)$ ]]; do
+			(( SBX[BI] = BASH_REMATCH[1] ))
+			(( SBY[BI] = BASH_REMATCH[2] ))
+			(( SBZ[BI] = BASH_REMATCH[3] ))
+			(( BI++ ))
+			shift
+		done
+		(( SCANNERCOUNT = BI ))
+		(( SI++ ))
+	done
+	(( NUMSCANNERS = SI ))
+
+	echo -n "Scanners = $NUMSCANNERS  Beacons = "
+	for (( SI = 0 ; SI < NUMSCANNERS ; SI++ )); do
+		declare -n SCANNERCOUNT="SCANNER${SI}COUNT"
+		echo -n "$SCANNERCOUNT "
+	done
+	echo
+
+	for (( SI = 0 ; SI < NUMSCANNERS ; SI++ )); do
+		builddistmap "SCANNER${SI}DIST" "SCANNER${SI}COUNT" "SCANNER${SI}BEACONX" "SCANNER${SI}BEACONY" "SCANNER${SI}BEACONZ"
+		declare -n SCANNERDIST="SCANNER${SI}DIST"
+		declare -a -i DISTCOUNT=()
+		for D in ${SCANNERDIST[@]}; do
+			(( DISTCOUNT[D]++ ))
+		done
+		for D in ${!DISTCOUNT[@]}; do
+			if (( D > 0 && ${DISTCOUNT[D]} != 2 )); then
+				echo "Warning - Scanner $SI distances repeated $D x ${DISTCOUNT[D]}"
+			fi
+		done
+	done
+	echo "Distances calculated"
+
+	declare -a -i MAPPEDBEACONX=() MAPPEDBEACONY=() MAPPEDBEACONZ=() MAPPEDDIST=()
+	MAPPEDBEACONX=( ${SCANNER0BEACONX[@]} )
+	MAPPEDBEACONY=( ${SCANNER0BEACONY[@]} )
+	MAPPEDBEACONZ=( ${SCANNER0BEACONZ[@]} )
+	declare -i MAPPEDCOUNT=$SCANNER0COUNT
+	MAPPEDDIST=( ${SCANNER0DIST[@]} )
+	declare -a -i MAPPEDSCANNER=( 1 ) MAPPEDSCANNERX=( 0 ) MAPPEDSCANNERY=( 0 ) MAPPEDSCANNERZ=( 0 )
+
+	while (( ${#MAPPEDSCANNER[@]} < NUMSCANNERS )); do
+		sleep 0.1
+		for (( SI = 1 ; SI < NUMSCANNERS ; SI++ )); do
+			if (( MAPPEDSCANNER[SI] == 1 )); then
+				continue
+			fi
+			declare -n SCANNERCOUNT="SCANNER${SI}COUNT" SCANNERDIST="SCANNER${SI}DIST"
+			declare -a -i MAPDISTMATCH=() SDISTMATCH=()
+			(( DISTMATCHCOUNT = 0 ))
+			findmapmatches
+			echo -ne "Scanner $SI Matches $DISTMATCHCOUNT distances\r"
+			# 12 common beacons = 66 matching distances
+			if (( DISTMATCHCOUNT >= 66)); then
+				break
+			fi
+		done
+		echo "Scanner $SI Matched $DISTMATCHCOUNT distances"
+		if (( SI == NUMSCANNERS )); then
+			echo "Not enough matches found"
+			exit 1
+		fi
+		#pick three matching beacons
+		(( MBA = MAPDISTMATCH[0] / MAPPEDCOUNT ))
+		(( MBB = MAPDISTMATCH[0] % MAPPEDCOUNT ))
+		(( SBA = SDISTMATCH[0] / SCANNERCOUNT ))
+		(( SBB = SDISTMATCH[0] % SCANNERCOUNT ))
+		for (( MI = 1 ; MI < DISTMATCHCOUNT ; MI++ )); do
+			if (( MBA == MAPDISTMATCH[MI] / MAPPEDCOUNT )); then
+				(( MBC = MAPDISTMATCH[MI] % MAPPEDCOUNT ))
+				(( SBC1 = SDISTMATCH[MI] / SCANNERCOUNT ))
+				(( SBC2 = SDISTMATCH[MI] % SCANNERCOUNT ))
+				if (( SBC1 == SBA || SBC1 == SBB )); then
+					(( SBC = SBC2 ))
+				else
+					(( SBC = SBC1 ))
+				fi
+				break
+			elif (( MBA == MAPDISTMATCH[MI] % MAPPEDCOUNT )); then
+				(( MBC = MAPDISTMATCH[MI] / MAPPEDCOUNT ))
+				(( SBC1 = SDISTMATCH[MI] / SCANNERCOUNT ))
+				(( SBC2 = SDISTMATCH[MI] % SCANNERCOUNT ))
+				if (( SBC1 == SBA || SBC1 == SBB )); then
+					(( SBC = SBC2 ))
+				else
+					(( SBC = SBC1 ))
+				fi
+				break
+			fi
+		done
+		if (( ${MAPPEDDIST[MBA*MAPPEDCOUNT+MBC]} != ${SCANNERDIST[SBA*MAPPEDCOUNT+SBC]} )); then
+			if (( ${MAPPEDDIST[MBA*MAPPEDCOUNT+MBC]} == ${SCANNERDIST[SBB*MAPPEDCOUNT+SBC]} )); then
+				(( SBT = SBA ))
+				(( SBA = SBB ))
+				(( SBB = SBT ))
+			else
+				echo "Mismatching distances"
+				exit 1
+			fi
+		fi
+		echo "Beacon A : Map $( coords MAPPEDBEACON $MBA ) : Scan $( coords SCANNER${SI}BEACON $SBA )"
+		echo "Beacon B : Map $( coords MAPPEDBEACON $MBB ) : Scan $( coords SCANNER${SI}BEACON $SBB )"
+		echo "Beacon C : Map $( coords MAPPEDBEACON $MBC ) : Scan $( coords SCANNER${SI}BEACON $SBC )"
+		echo "Distance A - B = ${MAPPEDDIST[MBA*MAPPEDCOUNT+MBB]} = ${SCANNERDIST[SBA*MAPPEDCOUNT+SBB]}"
+		echo "Distance A - C = ${MAPPEDDIST[MBA*MAPPEDCOUNT+MBC]} = ${SCANNERDIST[SBA*MAPPEDCOUNT+SBC]}"
+		echo "Distance B - C = ${MAPPEDDIST[MBB*MAPPEDCOUNT+MBC]} = ${SCANNERDIST[SBB*MAPPEDCOUNT+SBC]}"
+		# look for mdx(a-b) in sdx/sdy/sdz
+		#calc orientation
+		#add non matches to map
+
+		MAPPEDSCANNER[SI]=1
+		builddistmap "MAPPEDDIST" "MAPPEDCOUNT" "MAPPEDBEACONX" "MAPPEDBEACONY" "MAPPEDBEACONZ"
+	done
+}
+
+INPUT=( $(< input.txt ) )
+#INPUT=( $(< test.txt ) )
+
+mapbeacons "${INPUT[@]}"
