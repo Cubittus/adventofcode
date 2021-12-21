@@ -1,0 +1,43 @@
+#!/bin/bash
+
+function reportwin
+{
+	local -n WINSCORE=P${1}SCORE LOSESCORE=P${2}SCORE
+	echo "Player $1 wins with $WINSCORE points"
+	echo "Player $2 had $LOSESCORE points"
+	echo "Dice was rolled $ROLLCOUNT times"
+	echo "Multiple = $(( LOSESCORE * ROLLCOUNT ))"
+}
+
+function playdeterministicdiracdice
+{
+	(( P1POS = ${5} ))
+	(( P2POS = ${10} ))
+	(( P1SCORE = 0 ))
+	(( P2SCORE = 0 ))
+	(( ROLLCOUNT = 0 ))
+	while true; do
+		(( ROLL3 = ROLLCOUNT * 3 + 1 + 2 + 3 ))
+		(( ROLLCOUNT += 3 ))
+		(( P1POS = ( P1POS + ROLL3 ) % 10 ))
+		(( P1POS = ( P1POS == 0 ) ? 10 : P1POS ))
+		(( P1SCORE += P1POS ))
+		if (( P1SCORE >= 1000 )); then
+			reportwin 1 2
+			break
+		fi
+		(( ROLL3 = ROLLCOUNT * 3 + 1 + 2 + 3 ))
+		(( ROLLCOUNT += 3 ))
+		(( P2POS = ( P2POS + ROLL3 ) % 10 ))
+		(( P2POS = ( P2POS == 0 ) ? 10 : P2POS ))
+		(( P2SCORE += P2POS ))
+		if (( P2SCORE >= 1000 )); then
+			reportwin 2 1
+			break
+		fi
+	done
+}
+
+INPUT=( $(< input.txt) )
+
+playdeterministicdiracdice "${INPUT[@]}"
