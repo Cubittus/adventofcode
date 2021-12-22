@@ -1,0 +1,200 @@
+#!/bin/bash
+
+declare -a -i CUBEX0=() CUBEX1=() CUBEY0=() CUBEY1=() CUBEZ0=() CUBEZ1=()
+declare -i NC=0
+
+function printcubelist
+{
+	local -n PX0=${1}X0 PX1=${1}X1 PY0=${1}Y0 PY1=${1}Y1 PZ0=${1}Z0 PZ1=${1}Z1 PIN=${1}IN
+	local -i P N=0 VOL=0
+	for P in ${!PX0[@]}; do
+		#printf "%6s %4d : %5d , %5d , %5d  -  %5d , %5d , %5d : %d\n" $1 $P ${PX0[P]} ${PY0[P]} ${PZ0[P]} ${PX1[P]} ${PY1[P]} ${PZ1[P]} ${PIN[P]}
+		(( VOL += (PX1[P] - PX0[P] + 1) * (PY1[P] - PY0[P] + 1) * (PZ1[P] - PZ0[P] + 1) ))
+		(( N++ ))
+	done
+	printf "%6s %s cubes volume = %d\n" $1 $N $VOL
+}
+
+function findoverlap
+{
+	local -i I
+	for I in ${!CUBEX0[@]}; do
+		if (( NX0 > CUBEX1[I] || NX1 < CUBEX0[I] || NY0 > CUBEY1[I] || NY1 < CUBEY0[I] || NZ0 > CUBEZ1[I] || NZ1 < CUBEZ0[I] )); then
+			continue
+		fi
+		(( OVERLAP = I ))
+		break
+	done
+}
+
+function splitcube
+{
+	local C=$1
+	PARTX0=() PARTX1=() PARTY0=() PARTY1=() PARTZ0=() PARTZ1=()
+	PARTIN=()
+	(( PC = 0 ))
+	local -i OX0=$NX0 OX1=$NX1 OY0=$NY0 OY1=$NY1 OZ0=$NZ0 OZ1=$NZ1
+	local -i CX0 CX1 CY0 CY1 CZ0 CZ1
+	(( CX0 = CUBEX0[C] ))
+	(( CX1 = CUBEX1[C] ))
+	(( CY0 = CUBEY0[C] ))
+	(( CY1 = CUBEY1[C] ))
+	(( CZ0 = CUBEZ0[C] ))
+	(( CZ1 = CUBEZ1[C] ))
+	if (( OX0 < CX0 )); then
+		PARTX0+=( $OX0 ) PARTX1+=( $((CX0 - 1)) ) PARTY0+=( $OY0 ) PARTY1+=( $OY1 ) PARTZ0+=( $OZ0 ) PARTZ1+=( $OZ1 )
+		PARTIN+=( 2 )
+		(( PC++ ))
+		(( OX0 = CX0 ))
+	fi
+	if (( OX1 > CX1 )); then
+		PARTX0+=( $((CX1 + 1)) ) PARTX1+=( $OX1 ) PARTY0+=( $OY0 ) PARTY1+=( $OY1 ) PARTZ0+=( $OZ0 ) PARTZ1+=( $OZ1 )
+		PARTIN+=( 2 )
+		(( PC++ ))
+		(( OX1 = CX1 ))
+	fi
+	if (( OY0 < CY0 )); then
+		PARTX0+=( $OX0 ) PARTX1+=( $OX1 ) PARTY0+=( $OY0 ) PARTY1+=( $((CY0 - 1)) ) PARTZ0+=( $OZ0 ) PARTZ1+=( $OZ1 )
+		PARTIN+=( 2 )
+		(( PC++ ))
+		(( OY0 = CY0 ))
+	fi
+	if (( OY1 > CY1 )); then
+		PARTX0+=( $OX0 ) PARTX1+=( $OX1 ) PARTY0+=( $((CY1 + 1)) ) PARTY1+=( $OY1 ) PARTZ0+=( $OZ0 ) PARTZ1+=( $OZ1 )
+		PARTIN+=( 2 )
+		(( PC++ ))
+		(( OY1 = CY1 ))
+	fi
+	if (( OZ0 < CZ0 )); then
+		PARTX0+=( $OX0 ) PARTX1+=( $OX1 ) PARTY0+=( $OY0 ) PARTY1+=( $OY1 ) PARTZ0+=( $OZ0 ) PARTZ1+=( $((CZ0 - 1)) )
+		PARTIN+=( 2 )
+		(( PC++ ))
+		(( OZ0 = CZ0 ))
+	fi
+	if (( OZ1 > CZ1 )); then
+		PARTX0+=( $OX0 ) PARTX1+=( $OX1 ) PARTY0+=( $OY0 ) PARTY1+=( $OY1 ) PARTZ0+=( $((CZ1 + 1)) ) PARTZ1+=( $OZ1 )
+		PARTIN+=( 2 )
+		(( PC++ ))
+		(( OZ1 = CZ1 ))
+	fi
+	if (( CX0 < OX0 )); then
+		PARTX0+=( $CX0 ) PARTX1+=( $((OX0 - 1)) ) PARTY0+=( $CY0 ) PARTY1+=( $CY1 ) PARTZ0+=( $CZ0 ) PARTZ1+=( $CZ1 )
+		PARTIN+=( 1 )
+		(( PC++ ))
+		(( CX0 = OX0 ))
+	fi
+	if (( CX1 > OX1 )); then
+		PARTX0+=( $((OX1 + 1)) ) PARTX1+=( $CX1 ) PARTY0+=( $CY0 ) PARTY1+=( $CY1 ) PARTZ0+=( $CZ0 ) PARTZ1+=( $CZ1 )
+		PARTIN+=( 1 )
+		(( PC++ ))
+		(( CX1 = OX1 ))
+	fi
+	if (( CY0 < OY0 )); then
+		PARTX0+=( $CX0 ) PARTX1+=( $CX1 ) PARTY0+=( $CY0 ) PARTY1+=( $((OY0 - 1)) ) PARTZ0+=( $CZ0 ) PARTZ1+=( $CZ1 )
+		PARTIN+=( 1 )
+		(( PC++ ))
+		(( CY0 = OY0 ))
+	fi
+	if (( CY1 > OY1 )); then
+		PARTX0+=( $CX0 ) PARTX1+=( $CX1 ) PARTY0+=( $((OY1 + 1)) ) PARTY1+=( $CY1 ) PARTZ0+=( $CZ0 ) PARTZ1+=( $CZ1 )
+		PARTIN+=( 1 )
+		(( PC++ ))
+		(( CY1 = OY1 ))
+	fi
+	if (( CZ0 < OZ0 )); then
+		PARTX0+=( $CX0 ) PARTX1+=( $CX1 ) PARTY0+=( $CY0 ) PARTY1+=( $CY1 ) PARTZ0+=( $CZ0 ) PARTZ1+=( $((OZ0 - 1)) )
+		PARTIN+=( 1 )
+		(( PC++ ))
+		(( CZ0 = OZ0 ))
+	fi
+	if (( CZ1 > OZ1 )); then
+		PARTX0+=( $CX0 ) PARTX1+=( $CX1 ) PARTY0+=( $CY0 ) PARTY1+=( $CY1 ) PARTZ0+=( $((OZ1 + 1)) ) PARTZ1+=( $CZ1 )
+		PARTIN+=( 1 )
+		(( PC++ ))
+		(( CZ1 = OZ1 ))
+	fi
+	PARTX0+=( $OX0 ) PARTX1+=( $OX1 ) PARTY0+=( $OY0 ) PARTY1+=( $OY1 ) PARTZ0+=( $OZ0 ) PARTZ1+=( $OZ1 )
+	PARTIN+=( 3 )
+	(( PC++ ))
+}
+
+function mergecube
+{
+	local -i ADD=$1
+	local -i NX0=$2 NX1=$3 NY0=$4 NY1=$5 NZ0=$6 NZ1=$7
+	#echo "Merging $1 $NX0 , $NY0 , $NZ0 - $NX1 , $NY1 , $NZ1"
+	local -i OVERLAP=-1
+	findoverlap
+	if (( OVERLAP != -1 )); then
+		#echo "Overlap with $OVERLAP : $NX0 , $NY0 , $NZ0 - $NX1 , $NY1 , $NZ1"
+		local -a -i PARTX0=() PARTX1=() PARTY0=() PARTY1=() PARTZ0=() PARTZ1=()
+		local -a -i PARTIN=() # 1 = cube map 2 = new cube 3 = both
+		local -i PC=0
+		splitcube $OVERLAP
+		unset CUBEX0[OVERLAP]
+		#printcubelist PART
+		local -i P
+		for (( P = 0 ; P < PC ; P++ )); do
+			if (( ADD )); then
+				mergecube 1 ${PARTX0[P]} ${PARTX1[P]} ${PARTY0[P]} ${PARTY1[P]} ${PARTZ0[P]} ${PARTZ1[P]}
+			else
+				if (( PARTIN[P] == 1 )); then
+					mergecube 1 ${PARTX0[P]} ${PARTX1[P]} ${PARTY0[P]} ${PARTY1[P]} ${PARTZ0[P]} ${PARTZ1[P]}
+				else
+					mergecube 0 ${PARTX0[P]} ${PARTX1[P]} ${PARTY0[P]} ${PARTY1[P]} ${PARTZ0[P]} ${PARTZ1[P]}
+				fi
+			fi
+		done
+	else
+		if (( ADD )); then
+			(( CUBEX0[NC]=$NX0 ))
+			(( CUBEX1[NC]=$NX1 ))
+			(( CUBEY0[NC]=$NY0 ))
+			(( CUBEY1[NC]=$NY1 ))
+			(( CUBEZ0[NC]=$NZ0 ))
+			(( CUBEZ1[NC]=$NZ1 ))
+			(( NC++ ))
+		fi
+		#printcubelist CUBE
+		break
+	fi
+}
+
+function initreactor
+{
+	local -i NX0 NX1 NY0 NY1 NZ0 NZ1
+	while (( $# >= 2 )); do
+		if [[ $2 =~ ^x=([-0-9]+)\.\.([-0-9]+),y=([-0-9]+)\.\.([-0-9]+),z=([-0-9]+)\.\.([-0-9]+)$ ]]; then
+			(( NX0 = BASH_REMATCH[1] ))
+			(( NX1 = BASH_REMATCH[2] ))
+			(( NY0 = BASH_REMATCH[3] ))
+			(( NY1 = BASH_REMATCH[4] ))
+			(( NZ0 = BASH_REMATCH[5] ))
+			(( NZ1 = BASH_REMATCH[6] ))
+		else
+			break
+		fi
+		if (( NX1 < -50 || NX0 > 50 || NY1 < -50 || NY0 > 50 || NZ0 < -50 || NZ1 > 50 )); then
+			echo "Skipping $1 $2"
+		elif [[ $1 == on ]] ; then
+			echo "Adding $2"
+			mergecube 1 $NX0 $NX1 $NY0 $NY1 $NZ0 $NZ1
+		elif [[ $1 == off ]] ; then
+			echo "Subing $2"
+			mergecube 0 $NX0 $NX1 $NY0 $NY1 $NZ0 $NZ1
+		else
+			break
+		fi
+		printcubelist CUBE
+		echo
+		shift 2
+	done
+	if (( $# )); then
+		echo "Unknown input : $1 $2"
+		exit 1
+	fi
+}
+
+INPUT=( $(< input.txt ) )
+
+initreactor "${INPUT[@]}"
