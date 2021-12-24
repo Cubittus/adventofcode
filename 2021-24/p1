@@ -1,0 +1,121 @@
+#!/bin/bash
+
+SOURCE=()
+PROGRAM=()
+IN=()
+declare -a -i BREAKPOINT=()
+declare -i PROGRAMLEN=0 INPTR=0 REGw=0 REGx=0 REGy=0 REGz=0
+
+function compile
+{
+	local INS OP1 OP2
+	SOURCE=(  " <init w>" " <init x>" " <init y>" " <init z>" " <init ptr>" )
+	PROGRAM=( "REGw = 0"  "REGx = 0"  "REGy = 0"  "REGz = 0"  "INPTR = 0" )
+	while (( $# >= 2 )) ; do
+		INS=$1
+		OP1="REG$2"
+		if [[ $INS == 'inp' ]]; then
+			(( BREAKPOINT[${#PROGRAM[@]}] = 1 ))
+			SOURCE+=( "INPUT $2" )
+			PROGRAM+=( "$OP1 = IN[INPTR]" )
+			SOURCE+=( " <ptr++>" )
+			PROGRAM+=( "INPTR++" )
+			shift 2
+		else
+			if [[ $3 =~ ^[wxyz]$ ]]; then
+				OP2="REG$3"
+			else
+				OP2="$3"
+			fi
+			case $1 in
+				add )
+					SOURCE+=( "ADD $2 $3" )
+					PROGRAM+=( "$OP1 = $OP1 + $OP2" )
+					;;
+				mul )
+					SOURCE+=( "MUL $2 $3" )
+					PROGRAM+=( "$OP1 = $OP1 * $OP2" )
+					;;
+				div )
+					SOURCE+=( "DIV $2 $3" )
+					PROGRAM+=( "$OP1 = $OP1 / $OP2" )
+					;;
+				mod )
+					SOURCE+=( "MOD $2 $3" )
+					PROGRAM+=( "$OP1 = $OP1 % $OP2" )
+					;;
+				eql )
+					SOURCE+=( "EQL $2 $3" )
+					PROGRAM+=( "$OP1 = ( $OP1 == $OP2 )" )
+					;;
+				* )
+					echo "Unrecognised instruction $1 $2 $3"
+					exit 1
+					;;
+			esac
+			shift 3
+		fi
+		done
+		PROGRAMLEN=${#PROGRAM[@]}
+	}
+
+function listprogram
+{
+	local P
+	for (( P = 0 ; P < PROGRAMLEN ; P++ )); do
+		if (( BREAKPOINT[P] )); then
+			B='*'
+		else
+			B=''
+		fi
+		if [[ ${SOURCE[P]:0:2} != ' <' ]]; then
+			printf "%3d : %1s : %-15s : %s\n" "$P" "$B" "${SOURCE[P]}" "${PROGRAM[P]}"
+		fi
+	done
+}
+
+function runprogram
+{
+	local P BREAK=$1 B=0
+	printf "%-3s : %-12s : %8s %8s %8s %8s\n" "PC" "Source" "w" "x" "y" "z"
+	for (( P = 0 ; P < PROGRAMLEN ; P++ )); do
+		if (( BREAKPOINT[P] )); then
+			printf "%-3s : %-12s : %8s %8s %8s %8s\n" "B" "------" "----" "----" "----" "----"
+			if (( B == BREAK )); then
+				break
+			fi
+			(( B++ ))
+		fi
+		(( ${PROGRAM[P]} ))
+		if [[ ${SOURCE[P]:0:2} != ' <' ]]; then
+			printf "%3d : %-12s : %8d %8d %8d %8d\n" "$P" "${SOURCE[P]}" "$REGw" "$REGx" "$REGy" "$REGz"
+		fi
+	done
+}
+
+function findlargestmodel
+{
+	compile "$@"
+	listprogram
+	MODEL=""
+	IN=()
+	for (( D = 0 ; D < 14 ; D++ )); do
+		for (( N = 99 ; N >= 11 ; N-- )); do
+			if (( N % 10 == 0 )); then
+				continue
+			fi
+			(( IN[D] = N / 10 ))
+			(( IN[D+1] = N % 10 ))
+			echo "Model ${IN[@]}"
+			runprogram $((D+2))
+			echo
+			sleep 0.2
+		done
+		echo
+		sleep 1
+	done
+}
+
+INPUT=( $(< input.txt ) )
+
+findlargestmodel ${INPUT[@]}
