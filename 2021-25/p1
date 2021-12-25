@@ -1,0 +1,81 @@
+#!/bin/bash
+C1=$'\e[48;2;0;30;80m'
+SP=' '
+CE=$'\e[38;2;0;150;120m▶'
+CS=$'\e[38;2;120;150;0m▼'
+C0=$'\e[0m'
+
+function printpatch
+{
+	local L
+	local -i Y
+	for (( Y = 0 ; Y < HEIGHT ; Y++ )); do
+		L="${PATCH[Y]//./$SP}"
+		L="${L//>/$CE}"
+		echo "$C1${L//v/$CS}$C0"
+	done
+}
+
+function moveeast
+{
+	local NEXT
+	local -i Y
+	for (( Y = 0 ; Y < HEIGHT ; Y++ )); do
+		NEXT="${PATCH[Y]//>./.>}"
+		if [[ "${PATCH[Y]}" =~ ^(\.)(.*)(\>)$ ]]; then
+			NEXT=">${NEXT:1:WIDTH-2}."
+		fi
+		if [[ "${PATCH[Y]}" != "$NEXT" ]]; then
+			(( CHANGED = 1 ))
+			PATCH[Y]="$NEXT"
+		fi
+	done
+}
+
+function movesouth
+{
+	local NEXT=( "${PATCH[@]}" )
+	local -i X Y
+	for (( Y = 0 ; Y < HEIGHT ; Y++ )); do
+		for (( X = 0 ; X < WIDTH ; X++ )); do
+			if [[ "${PATCH[Y]:X:1}" == 'v' && "${PATCH[(Y+1)%HEIGHT]:X:1}" == '.' ]]; then
+				NEXT[Y]="${NEXT[Y]:0:X}.${NEXT[Y]:X+1}"
+				NEXT[(Y+1)%HEIGHT]="${NEXT[(Y+1)%HEIGHT]:0:X}v${NEXT[(Y+1)%HEIGHT]:X+1}"
+				(( CHANGED = 1 ))
+			fi
+		done
+	done
+	PATCH=( "${NEXT[@]}" )
+}
+
+function cucumber
+{
+	PATCH=()
+	while (( $# )); do
+		PATCH+=( "$1" )
+		shift
+	done
+	(( WIDTH = ${#PATCH[0]} ))
+	(( HEIGHT = ${#PATCH[@]} ))
+
+	(( STEP = 0 ))
+	while true; do
+		echo "Step $STEP"
+		(( STEP % 10 == 0 )) && printpatch
+		(( CHANGED = 0 ))
+		moveeast
+		movesouth
+		(( STEP++ ))
+		if (( ! CHANGED )); then
+			break
+		fi
+		sleep 0.1
+	done
+	echo "No change on step $STEP"
+	printpatch
+}
+
+INPUT=( $(< input.txt ) )
+
+cucumber "${INPUT[@]}"
+
