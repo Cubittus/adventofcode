@@ -1,0 +1,24 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+
+function FindMaxFood
+{
+	local INPUT="$1"
+	local -i SUM=0 MAXSUM=0
+
+	while read LINE ; do
+		if [[ -z "$LINE" ]]; then
+			(( SUM = 0 ))
+		else
+			(( SUM += LINE ))
+		fi
+		if (( SUM > MAXSUM )); then
+			(( MAXSUM = SUM ))
+		fi
+	done < $INPUT
+	echo "Maximum food carried = $MAXSUM"
+}
+
+FindMaxFood $INPUT
