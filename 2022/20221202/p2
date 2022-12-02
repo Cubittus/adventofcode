@@ -1,0 +1,23 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+
+declare -A SCORE=(
+	"A X" 3  "A Y" 4  "A Z" 8
+	"B X" 1  "B Y" 5  "B Z" 9
+	"C X" 2  "C Y" 6  "C Z" 7
+)
+
+function CalcTotalScore
+{
+	local INPUT="$1"
+	local LINE
+	local -i TOTALSCORE=0
+	while read LINE ; do
+		(( TOTALSCORE += SCORE["$LINE"] ))
+	done < $INPUT
+	echo "Total score = $TOTALSCORE"
+}
+
+CalcTotalScore $INPUT
