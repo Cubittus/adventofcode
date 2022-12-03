@@ -1,0 +1,36 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+
+printf -v SCOREPOS "%c" ' ' {a..z} {A..Z}
+
+function SumPriorities
+{
+	local LINE C1 C2 RE DUPE SCRE
+	local -i LEN POS SCORE SUM=0
+	while read LINE ; do
+		(( LEN = ${#LINE} ))
+		C1="${LINE:0:LEN/2}"
+		C2="${LINE:LEN/2}"
+		RE="^([^$C2]*)"
+		if [[ "$C1" =~ $RE ]]; then
+			(( POS = ${#BASH_REMATCH[1]} ))
+			DUPE="${C1:POS:1}"
+			SCRE="^([^$DUPE]*)"
+			if [[ "$SCOREPOS" =~ $SCRE ]]; then
+				(( SCORE = ${#BASH_REMATCH[1]} ))
+				(( SUM += SCORE ))
+			else
+				echo "Not a letter"
+				exit 1
+			fi
+		else
+			echo "No shared item"
+			exit 1
+		fi
+	done < $INPUT
+	echo "Sum of priorities = $SUM"
+}
+
+SumPriorities $INPUT
