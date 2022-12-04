@@ -7,6 +7,7 @@ printf -v SCOREPOS "%c" ' ' {a..z} {A..Z}
 
 function SumBadgePriorities
 {
+	local INPUT="$1"
 	local LINE1 LINE2 LINE3
 	local -i LEN I SCORE SUM=0
 	local -A LET
