@@ -1,0 +1,31 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+
+# 0-1 2_3
+# 0-2=1_3 *
+# 0-2=3-1 *
+# 2_0=1_3 *
+# 2_0=3-1 *
+# 2_3 0-1 
+
+function CountOverlapRanges
+{
+	local INPUT="$1"
+	local LINE SECTIONS=()
+	local IFS=',-'
+	local -i NOCOUNT=0 NUM=0
+	while read LINE ; do
+		(( NUM++ ))
+		SECTIONS=( $LINE )
+		if (( SECTIONS[1] < SECTIONS[2] )); then
+				(( NOCOUNT++ ))
+		elif (( SECTIONS[0] > SECTIONS[3] )); then
+				(( NOCOUNT++ ))
+		fi
+	done < $INPUT
+	echo "Number of contained ranges = $(( NUM - NOCOUNT ))"
+}
+
+CountOverlapRanges $INPUT
