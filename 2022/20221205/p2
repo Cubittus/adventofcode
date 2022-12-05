@@ -1,0 +1,72 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+
+function movestack
+{
+	local -i NUM=$1 SF=$2 ST=$3
+	local -n FROM="STACK$SF" TO="STACK$ST"
+	local -i N
+	TO+=${FROM: -NUM:NUM}
+	FROM=${FROM:0:-NUM}
+}
+
+function ReadAndParseInput
+{
+	local LINE
+	local -i NUMSTACKS=0 ROW=0
+	local STACKLINES=()
+	local IFS=''
+	while read LINE ; do
+		(( NUMSTACKS == 0 )) && (( NUMSTACKS = ( ${#LINE} + 1 ) / 4 ))
+		if [[ $LINE =~ \[ ]]; then
+			(( ROW++ ))
+			STACKLINES[ROW]="$LINE"
+		else
+			break
+		fi
+	done
+	local -i R S SPOS
+	local CRATE
+	for (( S = 1 ; S <= NUMSTACKS ; S++ )); do
+		(( SPOS = S * 4 - 3 ))
+		local -n STACK="STACK$S"
+		STACK=''
+		for (( R = ROW ; R > 0 ; R-- )); do
+			CRATE="${STACKLINES[R]:SPOS:1}"
+			if [[ "$CRATE" != ' ' ]]; then
+				STACK+="$CRATE"
+			else
+				break
+			fi
+		done
+	done
+	read LINE # blank
+	local MOVERE='^move ([1-9][0-9]*) from ([1-9][0-9]*) to ([1-9][0-9]*)$'
+	while read LINE ; do
+		if [[ "$LINE" =~ $MOVERE ]]; then
+			movestack ${BASH_REMATCH[@]:1:3}
+		else
+			echo "Failed to parse move line [$LINE]"
+			exit 1
+		fi
+	done
+	TOPCRATES=''
+	for (( S = 1 ; S <= NUMSTACKS ; S++ )); do
+		local -n STACK="STACK$S"
+		TOPCRATES+="${STACK: -1:1}"
+		echo "Stack $S = [$STACK]"
+	done
+}
+
+function FindTopCrates
+{
+	local INPUT="$1"
+	local TOPCRATES
+	ReadAndParseInput < $INPUT
+	echo "Top Crates are $TOPCRATES"
+}
+
+FindTopCrates $INPUT
+
