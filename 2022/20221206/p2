@@ -1,0 +1,24 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+
+function FindMessageStart
+{
+	local INPUT="$1"
+	local LINE
+	local -i LEN I
+	local RE="(.).*\\1"
+	while read LINE ; do
+		LEN=${#LINE}
+		for (( I = 14 ; I <= LEN ; I++ )); do
+			if [[ ! "${LINE:I-14:14}" =~ $RE ]]; then
+				echo "Packet starts at location $I with prefix ${LINE:I-14:14}"
+				break
+			fi
+		done
+	done < $INPUT
+}
+
+FindMessageStart $INPUT
+
