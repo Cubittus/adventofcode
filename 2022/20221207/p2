@@ -1,0 +1,126 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) && echo "$@" >&2
+}
+
+function error
+{
+	echo "$@" >&2
+	exit 1
+}
+
+function CDRoot
+{
+	CURDIR='ROOT'
+	CURPATH="$CURDIR"
+	(( DIRTREE[$CURPATH] = 0 ))
+	debug "Starting in Root"
+}
+
+function CDUp
+{
+	local LOC
+	LOC="${CURPATH%_$CURDIR}"
+	if [[ "$CURPATH" != "${LOC}_$CURDIR" ]]; then
+		error "Failed to move to parent of $CURPATH from $CURDIR"
+	fi
+	(( DIRTREE[$LOC] += DIRTREE[$CURPATH] ))
+	CURDIR="${LOC##*_}"
+	CURPATH="$LOC"
+	debug "Back to ${CURPATH//_/\/}"
+}
+
+function CDDir
+{
+	CURDIR="${1#$ cd }"
+	CURPATH="${CURPATH}_$CURDIR"
+	(( DIRTREE[$CURPATH] = 0 ))
+	debug "Now in ${CURPATH//_/\/}"
+}
+
+function LSFile
+{
+	local -i SIZE=$1
+	local LOC="${CURPATH}_${2#[1-9]* }"
+	debug "Found file ${LOC//_/\/} size $SIZE"
+	(( FILETREE[$LOC] = SIZE ))
+	(( DIRTREE[$CURPATH] += SIZE ))
+}
+
+function ReadStructure
+{
+	local LINE
+	local CURPATH CURDIR
+	read LINE
+	while true; do
+		case "$LINE" in
+			'' )
+				break
+				;;
+			'$ cd /' )
+				CDRoot
+				;;
+			'$ cd ..' )
+				CDUp
+				;;
+			'$ cd '[a-z]* )
+				CDDir "${LINE#$ cd }"
+				;;
+			'$ ls' )
+				debug "Listing ${CURPATH//_/\/}"
+				;;
+			'dir '* )
+				debug "Found path ${CURPATH//_/\/}/${LINE#dir }"
+				;;
+			[1-9]*' '* )
+				LSFile $LINE
+				;;
+			* )
+				error "WHAT IS THIS ? [$LINE]"
+				;;
+		esac
+		read LINE
+	done
+	while [[ $CURPATH != 'ROOT' ]]; do
+		CDUp
+	done
+}
+
+function FindSmallestAbove
+{
+	local -i FINDSIZE=$1 FOUNDSIZE=$CURUSED
+	local P FOUNDP
+	for P in ${!DIRTREE[@]} ; do
+		if (( DIRTREE[$P] >= FINDSIZE && DIRTREE[$P] < FOUNDSIZE )); then
+			(( FOUNDSIZE = DIRTREE[$P] ))
+			FOUNDP=$P
+		fi
+	done
+	echo "Deleting path ${P//_/\/} would free up $FOUNDSIZE"
+}
+
+function PickDirToDelete
+{
+	local INPUT="$1"
+	local -A FILETREE=() DIRTREE=()
+	local -i SUM
+	ReadStructure < $INPUT
+	debug "FILES: ${FILETREE[@]@A}"
+	debug "DIRS: ${DIRTREE[@]@A}"
+	local -i TOTALDISK=70000000 NEEDSPACE=30000000
+	local -i CURUSED CURFREE NEEDTOFREE
+	(( CURUSED = ${DIRTREE[ROOT]} ))
+	(( CURFREE = TOTALDISK - CURUSED ))
+	(( NEEDTOFREE = NEEDSPACE - CURFREE ))
+	debug "Used = $CURUSED  Free = $CURFREE  Need to delete $NEEDTOFREE"
+	FindSmallestAbove $NEEDTOFREE
+}
+
+PickDirToDelete $INPUT
+
