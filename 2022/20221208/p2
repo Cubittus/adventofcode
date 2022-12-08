@@ -1,0 +1,110 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	(( $# > 1 )) && printf "$@" >&2 || echo "$@" >&2
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+
+function ReadTreeGrid
+{
+	local LINE
+	local -i X=0 Y=0
+
+	read LINE < $INPUT
+	WIDTH=${#LINE}
+	while read LINE ; do
+		GRIDR[Y]="$LINE"
+		for (( X = 0 ; X < WIDTH ; X++)); do
+			GRIDL[Y]+="${LINE:WIDTH-X-1:1}"
+			GRIDD[X]+="${LINE:X:1}"
+			GRIDU[X]="${LINE:X:1}${GRIDU[X]}"
+		done
+		((Y++))
+	done < $INPUT
+	HEIGHT=$Y
+
+	for (( Y = 0 ; Y < HEIGHT ; Y++ )); do
+		debug "%2d : %s\n" $Y ${GRIDR[Y]}
+	done
+	debug
+	for (( Y = 0 ; Y < HEIGHT ; Y++ )); do
+		debug "%2d : %s\n" $Y ${GRIDL[Y]}
+	done
+	debug
+	for (( X = 0 ; X < WIDTH ; X++ )); do
+		debug "%2d : %s\n" $X ${GRIDD[X]}
+	done
+	debug
+	for (( X = 0 ; X < WIDTH ; X++ )); do
+		debug "%2d : %s\n" $X ${GRIDU[X]}
+	done
+}
+
+function FindBestTree
+{
+	local INPUT="$1"
+	local GRIDR=() GRIDD=() GRIDL=() GRIDU=()
+	local -i WIDTH HEIGHT X Y H VR VD VL VU
+	local -i EDGETREES VISIBLEINNERTREES=0
+
+	ReadTreeGrid "$INPUT"
+
+	local -i SCORE TOPSCORE=0 BESTX BESTY
+
+	for (( Y = 1 ; Y < HEIGHT - 1 ; Y++ )); do
+		for (( X = 1 ; X < WIDTH - 1 ; X++ )); do
+			H=${GRIDR[Y]:X:1}
+			debug "%2dx%2d = %1d\n" $X $Y $H
+			if (( H == 0 )); then
+				continue
+			fi
+			HRE="^([0-$((H-1))]*[$H-9]|[0-$((H-1))]*$)"
+			if [[ ${GRIDR[Y]:X+1} =~ $HRE ]]; then
+				debug "Right = %s ~ %s : %d\n" ${GRIDR[Y]:X+1} ${BASH_REMATCH[1]} ${#BASH_REMATCH[1]}
+				VR=${#BASH_REMATCH[1]}
+			else
+				error "Bug right @ $X $Y"
+			fi
+			if [[ ${GRIDD[X]:Y+1} =~ $HRE ]]; then
+				debug "Down = %s ~ %s : %d\n" ${GRIDD[X]:Y+1} ${BASH_REMATCH[1]} ${#BASH_REMATCH[1]}
+				VD=${#BASH_REMATCH[1]}
+			else
+				error "Bug down @ $X $Y"
+			fi
+			if [[ ${GRIDL[Y]:WIDTH-X} =~ $HRE ]]; then
+				debug "Left = %s ~ %s : %d\n" ${GRIDL[Y]:WIDTH-X} ${BASH_REMATCH[1]} ${#BASH_REMATCH[1]}
+				VL=${#BASH_REMATCH[1]}
+			else
+				error "Bug left @ $X $Y"
+			fi
+			if [[ ${GRIDU[X]:HEIGHT-Y} =~ $HRE ]]; then
+				debug "Up = %s ~ %s : %d\n" ${GRIDU[X]:HEIGHT-Y} ${BASH_REMATCH[1]} ${#BASH_REMATCH[1]}
+				VU=${#BASH_REMATCH[1]}
+			else
+				error "Bug up @ $X $Y"
+			fi
+			(( SCORE = VR * VD * VL * VU ))
+			if (( SCORE > TOPSCORE )); then
+				(( TOPSCORE = SCORE ))
+				(( BESTX = X+1 ))
+				(( BESTY = Y+1 ))
+			fi
+		done
+	done
+	printf "Top score at tree %d x %d : %d\n" $BESTX $BESTY $TOPSCORE
+}
+
+FindBestTree $INPUT
+

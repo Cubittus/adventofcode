@@ -1,0 +1,79 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	printf "$@" >&2
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+
+function ReadTreeGrid
+{
+	local LINE
+	local -i X=0 Y=0
+
+	read LINE < $INPUT
+	WIDTH=${#LINE}
+	while read LINE ; do
+		GRIDO[Y]="$LINE"
+		for (( X = 0 ; X < WIDTH ; X++)); do
+			GRIDF[X]+="${LINE:X:1}"
+		done
+		((Y++))
+	done < $INPUT
+	HEIGHT=$Y
+
+	for (( Y = 0 ; Y < HEIGHT ; Y++ )); do
+		debug "%2d : %s\n" $Y ${GRIDO[Y]}
+	done
+	echo
+	for (( X = 0 ; X < WIDTH ; X++ )); do
+		debug "%2d : %s\n" $X ${GRIDF[X]}
+	done
+}
+
+function CountVisibleTrees
+{
+	local INPUT="$1"
+	local GRIDO=() GRIDF=()
+	local -i WIDTH HEIGHT X Y H
+	local -i EDGETREES VISIBLEINNERTREES=0
+
+	ReadTreeGrid "$INPUT"
+	(( EDGETREES = WIDTH * 2 + HEIGHT * 2 - 4 ))
+	for (( Y = 1 ; Y < HEIGHT - 1 ; Y++ )); do
+		for (( X = 1 ; X < WIDTH - 1 ; X++ )); do
+			H=${GRIDO[Y]:X:1}
+			debug "%2dx%2d = %1d\n" $X $Y $H
+			if (( H == 0 )); then
+				continue
+			fi
+			HRE="[$H-9]"
+			if [[ "${GRIDO[Y]:0:X}" =~ $HRE ]]; then
+				if [[ "${GRIDO[Y]:X+1}" =~ $HRE ]]; then
+					if [[ "${GRIDF[X]:0:Y}" =~ $HRE ]]; then
+						if [[ "${GRIDF[X]:Y+1}" =~ $HRE ]]; then
+							continue
+						fi
+					fi
+				fi
+			fi
+			(( VISIBLEINNERTREES++ ))
+		done
+	done
+	printf "There are %d edge trees and %d visible inner trees, which total %d visible trees" $EDGETREES $VISIBLEINNERTREES $((EDGETREES+VISIBLEINNERTREES))
+
+}
+
+CountVisibleTrees $INPUT
+
