@@ -1,0 +1,100 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	printf "$@" >&2
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+# Head-Tail positions: ON UP UR RT DR DN DL LT UL
+# Moves: U R D L
+# New positions
+declare -A MOVEPOS=(
+	[ON,U]=UP [ON,R]=RT [ON,D]=DN [ON,L]=LT
+	[UP,U]=UP [UP,R]=UR [UP,D]=ON [UP,L]=UL
+	[UR,U]=UP [UR,R]=RT [UR,D]=RT [UR,L]=UP
+	[RT,U]=UR [RT,R]=RT [RT,D]=DR [RT,L]=ON
+	[DR,U]=RT [DR,R]=RT [DR,D]=DN [DR,L]=DN
+	[DN,U]=ON [DN,R]=DR [DN,D]=DN [DN,L]=DL
+	[DL,U]=LT [DL,R]=DN [DL,D]=DN [DL,L]=LT
+	[LT,U]=UL [LT,R]=ON [LT,D]=DL [LT,L]=LT
+	[UL,U]=UP [UL,R]=UP [UL,D]=LT [UL,L]=LT
+)
+# New coords
+declare -A MOVEX=(
+	[ON,U]=0  [ON,R]=0  [ON,D]=0  [ON,L]=0
+	[UP,U]=0  [UP,R]=0  [UP,D]=0  [UP,L]=0
+	[UR,U]=1  [UR,R]=1  [UR,D]=0  [UR,L]=0
+	[RT,U]=0  [RT,R]=1  [RT,D]=0  [RT,L]=0
+	[DR,U]=0  [DR,R]=1  [DR,D]=1  [DR,L]=0
+	[DN,U]=0  [DN,R]=0  [DN,D]=0  [DN,L]=0
+	[DL,U]=0  [DL,R]=0  [DL,D]=-1 [DL,L]=-1
+	[LT,U]=0  [LT,R]=0  [LT,D]=0  [LT,L]=-1
+	[UL,U]=-1 [UL,R]=0  [UL,D]=0  [UL,L]=-1
+)
+declare -A MOVEY=(
+	[ON,U]=0  [ON,R]=0  [ON,D]=0  [ON,L]=0
+	[UP,U]=1  [UP,R]=0  [UP,D]=0  [UP,L]=0
+	[UR,U]=1  [UR,R]=1  [UR,D]=0  [UR,L]=0
+	[RT,U]=0  [RT,R]=0  [RT,D]=0  [RT,L]=0
+	[DR,U]=0  [DR,R]=-1 [DR,D]=-1 [DR,L]=0
+	[DN,U]=0  [DN,R]=0  [DN,D]=-1 [DN,L]=0
+	[DL,U]=0  [DL,R]=0  [DL,D]=-1 [DL,L]=-1
+	[LT,U]=0  [LT,R]=0  [LT,D]=0  [LT,L]=0
+	[UL,U]=1  [UL,R]=0  [UL,D]=0  [UL,L]=1
+)
+
+function CountVisits
+{
+	local INPUT="$1"
+	local LINE POS='ON' MOVEDIR
+	local -i MOVESIZE N TAILX=0 TAILY=0
+	local -i MINTX=0 MAXTX=0 MINTY=0 MAXTY=0
+	local -A TAILVISITS=( [$TAILX,$TAILY]=1 )
+	local MOVERE='^([URDL]) ([1-9][0-9]*)$'
+	while read LINE ; do
+		[[ "$LINE" =~ $MOVERE ]] || error "Invalid line read [$LINE]"
+		MOVEDIR=${BASH_REMATCH[1]}
+		MOVESIZE=${BASH_REMATCH[2]}
+		for (( N = 0 ; N < MOVESIZE ; N++ )); do
+			(( TAILX += MOVEX[$POS,$MOVEDIR] ))
+			(( TAILY += MOVEY[$POS,$MOVEDIR] ))
+			POS=${MOVEPOS[$POS,$MOVEDIR]}
+			(( TAILVISITS[$TAILX,$TAILY]++ ))
+			debug "After move [%s] part %d : At %d,%d pos %s : %s\n" "$LINE" $((N+1)) $TAILX $TAILY $POS "${TAILVISITS[*]@A}"
+			(( TAILX < MINTX )) && (( MINTX = TAILX ))
+			(( TAILX > MAXTX )) && (( MAXTX = TAILX ))
+			(( TAILY < MINTY )) && (( MINTY = TAILY ))
+			(( TAILY > MAXTY )) && (( MAXTY = TAILY ))
+		done
+	done < $INPUT
+	for (( TAILY = MAXTY ; TAILY >= MINTY ; TAILY-- )); do
+		for (( TAILX = MINTX ; TAILX <= MAXTX ; TAILX++ )); do
+			if (( TAILVISITS[$TAILX,$TAILY] )); then
+				if (( TAILVISITS[$TAILX,$TAILY] > 9 )); then
+					echo -n '#'
+				else
+					echo -n ${TAILVISITS[$TAILX,$TAILY]}
+				fi
+			else
+				echo -n '.'
+			fi
+		done
+		echo
+	done
+	echo
+	printf "The tail visited %d locations\n" "${#TAILVISITS[*]}"
+}
+
+CountVisits $INPUT
+

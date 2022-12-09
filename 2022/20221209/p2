@@ -1,0 +1,126 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	printf "$@" >&2
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+# Node positions and moves: O U UR R DR D DL L UL
+# New positions
+declare -A MOVEPOS=(
+	[O,O]=O    [O,U]=U    [O,R]=R    [O,D]=D    [O,L]=L    [O,UR]=UR   [O,DR]=DR   [O,DL]=DL   [O,UL]=UL
+	[U,O]=U    [U,U]=U    [U,R]=UR   [U,D]=O    [U,L]=UL   [U,UR]=U    [U,DR]=R    [U,DL]=L    [U,UL]=U
+	[UR,O]=UR  [UR,U]=U   [UR,R]=R   [UR,D]=R   [UR,L]=U   [UR,UR]=UR  [UR,DR]=R   [UR,DL]=O   [UR,UL]=U
+	[R,O]=R    [R,U]=UR   [R,R]=R    [R,D]=DR   [R,L]=O    [R,UR]=R    [R,DR]=R    [R,DL]=D    [R,UL]=U
+	[DR,O]=DR  [DR,U]=R   [DR,R]=R   [DR,D]=D   [DR,L]=D   [DR,UR]=R   [DR,DR]=DR  [DR,DL]=D   [DR,UL]=O
+	[D,O]=D    [D,U]=O    [D,R]=DR   [D,D]=D    [D,L]=DL   [D,UR]=R    [D,DR]=D    [D,DL]=D    [D,UL]=L
+	[DL,O]=DL  [DL,U]=L   [DL,R]=D   [DL,D]=D   [DL,L]=L   [DL,UR]=O   [DL,DR]=D   [DL,DL]=DL  [DL,UL]=L
+	[L,O]=L    [L,U]=UL   [L,R]=O    [L,D]=DL   [L,L]=L    [L,UR]=U    [L,DR]=D    [L,DL]=L    [L,UL]=L
+	[UL,O]=UL  [UL,U]=U   [UL,R]=U   [UL,D]=L   [UL,L]=L   [UL,UR]=U   [UL,DR]=O   [UL,DL]=L   [UL,UL]=UL
+)
+declare -A MOVEMOVE=(
+	[O,O]=O    [O,U]=O    [O,R]=O    [O,D]=O    [O,L]=O    [O,UR]=O    [O,DR]=O    [O,DL]=O    [O,UL]=O 
+	[U,O]=O    [U,U]=U    [U,R]=O    [U,D]=O    [U,L]=O    [U,UR]=UR   [U,DR]=O    [U,DL]=O    [U,UL]=UL
+	[UR,O]=O   [UR,U]=UR  [UR,R]=UR  [UR,D]=O   [UR,L]=O   [UR,UR]=UR  [UR,DR]=R   [UR,DL]=O   [UR,UL]=U
+	[R,O]=O    [R,U]=O    [R,R]=R    [R,D]=O    [R,L]=O    [R,UR]=UR   [R,DR]=DR   [R,DL]=O    [R,UL]=O
+	[DR,O]=O   [DR,U]=O   [DR,R]=DR  [DR,D]=DR  [DR,L]=O   [DR,UR]=R   [DR,DR]=DR  [DR,DL]=D   [DR,UL]=O
+	[D,O]=O    [D,U]=O    [D,R]=O    [D,D]=D    [D,L]=O    [D,UR]=O    [D,DR]=DR   [D,DL]=DL   [D,UL]=O
+	[DL,O]=O   [DL,U]=O   [DL,R]=O   [DL,D]=DL  [DL,L]=DL  [DL,UR]=O   [DL,DR]=D   [DL,DL]=DL  [DL,UL]=L
+	[L,O]=O    [L,U]=O    [L,R]=O    [L,D]=O    [L,L]=L    [L,UR]=O    [L,DR]=O    [L,DL]=DL   [L,UL]=UL
+	[UL,O]=O   [UL,U]=UL  [UL,R]=O   [UL,D]=O   [UL,L]=UL  [UL,UR]=U   [UL,DR]=O   [UL,DL]=L   [UL,UL]=UL
+)
+# New coords
+declare -A MOVEX=( [ON]=0  [U]=0  [UR]=1  [R]=1  [DR]=1  [D]=0  [DL]=-1 [L]=-1 [UL]=-1 [U]=0 )
+declare -A MOVEY=( [ON]=0  [U]=1  [UR]=1  [R]=0  [DR]=-1 [D]=-1 [DL]=-1 [L]=0  [UL]=1  [U]=1 )
+
+function PlotNodes
+{
+	local -i X Y T N
+	for (( Y = MAXY ; Y >= MINY ; Y-- )); do
+		for (( X = MINX ; X <= MAXX ; X++ )); do
+			echo -n '.'
+			for (( N = 1 ; N <= 9 ; N++ )); do
+				if (( NODEX[N] == X && NODEY[N] == Y )); then
+					echo -ne "\b$N"
+					break
+				fi
+			done
+		done
+		echo
+	done
+	echo
+}
+
+function PlotVisits
+{
+	local -i X Y T
+	for (( Y = MAXY ; Y >= MINY ; Y-- )); do
+		for (( X = MINX ; X <= MAXX ; X++ )); do
+			(( T = TAILVISITS[$X,$Y] ))
+			if (( T )); then
+				if (( T > 9 )); then
+					echo -n '#'
+				else
+					echo -n $T
+				fi
+			else
+				echo -n '.'
+			fi
+		done
+		echo
+	done
+	echo
+}
+
+function CountVisits
+{
+	local INPUT="$1"
+	local LINE POS=( [1]=O O O O O O O O O ) MOVEDIR NEXTMOVE THISPOS NEXTPOS
+	local -i MOVESIZE M N NODEX=( [1]=0 0 0 0 0 0 0 0 0 ) NODEY=( [1]=0 0 0 0 0 0 0 0 0 ) LINENO=0
+	local -i MINX=0 MAXX=0 MINY=0 MAXY=0
+	local -A TAILVISITS=( [${NODEX[9]},${NODEY[9]}]=1 )
+	local MOVERE='^([URDL]) ([1-9][0-9]*)$'
+	while read LINE ; do
+		[[ "$LINE" =~ $MOVERE ]] || error "Invalid line read [$LINE]"
+		MOVEDIR=${BASH_REMATCH[1]}
+		MOVESIZE=${BASH_REMATCH[2]}
+		for (( M = 0 ; M < MOVESIZE ; M++ )); do
+			NEXTMOVE=$MOVEDIR
+			for (( N = 1 ; N <= 9 ; N++ )); do
+				THISPOS=${POS[N]}
+				NEXTPOS=${MOVEPOS[$THISPOS,$NEXTMOVE]}
+				NEXTMOVE=${MOVEMOVE[$THISPOS,$NEXTMOVE]}
+				(( NODEX[N] += MOVEX[$NEXTMOVE] ))
+				(( NODEY[N] += MOVEY[$NEXTMOVE] ))
+				POS[N]=$NEXTPOS
+				(( NODEX[N] < MINX )) && (( MINX = NODEX[N] ))
+				(( NODEX[N] > MAXX )) && (( MAXX = NODEX[N] ))
+				(( NODEY[N] < MINY )) && (( MINY = NODEY[N] ))
+				(( NODEY[N] > MAXY )) && (( MAXY = NODEY[N] ))
+			done
+			(( TAILVISITS[${NODEX[9]},${NODEY[9]}]++ ))
+			debug "After move [%s] part %d : Node 1 at %d,%d pos %s : Node 9 at %d,%d pos %s\n" "$LINE" $((M+1)) ${NODEX[1]} ${NODEY[1]} ${POS[1]} ${NODEX[9]} ${NODEY[9]} ${POS[9]}
+		done
+		((DEBUG)) && PlotNodes
+		((LINENO++))
+		((DEBUG)) || printf "Line %2d : %10s : Visits = %4d\r" $LINENO "$LINE" ${#TAILVISITS[*]}
+	done < $INPUT
+	echo
+	PlotVisits
+	printf "The tail visited %d locations\n" ${#TAILVISITS[*]}
+}
+
+CountVisits $INPUT
+
