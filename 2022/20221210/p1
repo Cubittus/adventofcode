@@ -1,0 +1,59 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	printf "$@" >&2
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+shopt -s extglob
+
+function SumSignalStrengths
+{
+	local INPUT="$1"
+	local LINE
+	local -i CYCLE=1 X=1
+	local REGX=()
+	while read LINE ; do
+		case "$LINE" in
+			noop )
+				(( REGX[CYCLE] = X ))
+				(( CYCLE++ ))
+				;;
+			addx\ +([-0-9]) )
+				(( REGX[CYCLE] = X ))
+				(( CYCLE++ ))
+				(( REGX[CYCLE] = X ))
+				(( CYCLE++ ))
+				(( X += ${LINE#addx } ))
+				;;
+			* )
+				error "What is [%s]?\n" "$LINE"
+				;;
+		esac
+	done < $INPUT
+	debug "After %d cycles X = %d\n%s\n" $CYCLE $X "${REGX[*]@K}"
+	local -i C STRENGTHSUM=0
+	local STRENGTH=()
+	for (( C = 20 ; C <= 220 ; C += 40 )); do
+		(( STRENGTH[C] = REGX[C] * C ))
+		(( STRENGTHSUM += STRENGTH[C] ))
+	done
+	printf "Strengths are: %d @ 20 / %d @ 60 / %d @ 100 / %d @ 140 / %d @ 180 / %d @ 220\n" "${STRENGTH[@]}"
+	printf "Sum of Strengths = %d" $STRENGTHSUM
+	echo ""
+}
+
+SumSignalStrengths $INPUT
+

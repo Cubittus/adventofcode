@@ -1,0 +1,60 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	printf "$@" >&2
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+shopt -s extglob
+
+function RenderDisplay
+{
+	local INPUT="$1"
+	local LINE
+	local -i CYCLE=1 X=1
+	local REGX=()
+	while read LINE ; do
+		case "$LINE" in
+			noop )
+				(( REGX[CYCLE] = X ))
+				(( CYCLE++ ))
+				;;
+			addx\ +([-0-9]) )
+				(( REGX[CYCLE] = X ))
+				(( CYCLE++ ))
+				(( REGX[CYCLE] = X ))
+				(( CYCLE++ ))
+				(( X += ${LINE#addx } ))
+				;;
+			* )
+				error "What is [%s]?\n" "$LINE"
+				;;
+		esac
+	done < $INPUT
+	debug "After %d cycles X = %d\n%s\n" $CYCLE $X "${REGX[*]@K}"
+	local C
+	for (( C = 0 ; C < 40*6 ; C++ )); do
+		(( X = REGX[C+1] ))
+		if (( C % 40 == X - 1 || C % 40 == X || C % 40 == X + 1 )); then
+			echo -n '#'
+		else
+			echo -n '.'
+		fi
+		(( C % 40 == 39 )) && echo
+	done
+}
+
+RenderDisplay $INPUT
+
