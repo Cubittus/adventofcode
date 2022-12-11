@@ -1,0 +1,119 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	printf "$@" >&2
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadNotes
+{
+	local LINE
+	local -i N=0
+	local IFS=$'\n'
+	while read LINE ; do
+		read LINE
+		LINE="${LINE#  Starting items: }"
+		ITEMS[N]="${LINE//,/}"
+		read LINE
+		LINE="${LINE#  Operation: new = }"
+		OPERATION[N]="${LINE//old/WORRY}"
+		read LINE
+		LINE="${LINE#  Test: divisible by }"
+		(( TEST[N] = LINE ))
+		read LINE
+		LINE="${LINE#    If true: throw to monkey }"
+		(( PASSTRUE[N] = LINE ))
+		read LINE
+		LINE="${LINE#    If false: throw to monkey }"
+		(( PASSFALSE[N] = LINE ))
+		read LINE
+		(( N++ ))
+	done
+	(( NUMMONKEYS = N ))
+}
+
+function PrintMonkeys
+{
+	local -i M TOP1=0 TOP2=0
+	for (( M = 0; M < NUMMONKEYS; M++ )); do
+		printf "Monkey %d : [%s] : Has made %d inspections\n" $M "${ITEMS[M]}" ${INSPECTIONS[M]}
+		printf "          : WORRY = %s\n" "${OPERATION[M]}"
+		printf "          : If WORRY MOD %d == 0 Then Pass to monkey %d else pass to monkey %d\n" ${TEST[M]} ${PASSTRUE[M]} ${PASSFALSE[M]}
+		if (( INSPECTIONS[M] > TOP1 )); then
+			(( TOP2 = TOP1 ))
+			(( TOP1 = INSPECTIONS[M] ))
+		elif (( INSPECTIONS[M] > TOP2 )); then
+			(( TOP2 = INSPECTIONS[M] ))
+		fi
+	done
+	printf "Monkey Business = %d x %d = %d\n" $TOP1 $TOP2 $((TOP1 * TOP2))
+}
+
+function MonkeyTurn
+{
+	local -i M=$1
+	local IFS=$' \n'
+	for WORRY in ${ITEMS[M]}; do
+		debug "Monkey %d inspecting item %d" $M $WORRY
+		(( INSPECTIONS[M]++ ))
+		(( WORRY = ${OPERATION[M]} ))
+		debug " -> %d" $WORRY
+		(( WORRY = WORRY / 3 ))
+		debug " -> %d" $WORRY
+		if (( WORRY % ${TEST[M]} == 0 )); then
+			debug " : mod(%d)==0 : Pass to %d" ${TEST[M]} ${PASSTRUE[M]}
+			ITEMS[PASSTRUE[M]]+=" $WORRY"
+		else
+			debug " : mod(%d)!=0 : Pass to %d" ${TEST[M]} ${PASSFALSE[M]}
+			ITEMS[PASSFALSE[M]]+=" $WORRY"
+		fi
+		debug
+	done
+	ITEMS[M]=""
+}
+
+function MonkeyRound
+{
+	local -i M
+	for (( M = 0 ; M < NUMMONKEYS ; M++ )); do
+		MonkeyTurn $M
+	done
+}
+
+function MonkeyRounds
+{
+	local -i NUMROUNDS=$1 R
+	for (( R = 1 ; R <= NUMROUNDS ; R++ )); do
+		debug "\nROUND %d\n" $R
+		MonkeyRound
+		(( DEBUG )) && PrintMonkeys
+	done
+}
+
+function MonkeyBusiness
+{
+	local INPUT="$1"
+	local -i NUMMONKEYS=0
+	local ITEMS=() OPERATION=() TEST=() PASSTRUE=() PASSFALSE=()
+	ReadNotes < $INPUT
+	debug "There are %d monkeys\n" $NUMMONKEYS
+	(( DEBUG )) && PrintMonkeys
+	local INSPECTIONS=()
+	MonkeyRounds 20
+	PrintMonkeys
+}
+
+MonkeyBusiness $INPUT
+
