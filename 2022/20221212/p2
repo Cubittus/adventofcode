@@ -1,0 +1,110 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function PrintQueueMap
+{
+	local -i P Q
+	for (( Q = QF ; Q < QB ; Q++ )); do
+		printf "(%d,%d:%d) " $((QP[Q]%MW)) $((QP[Q]/MW)) $((QD[Q]))
+	done
+	for (( P = 0 ; P < MS ; P++ )); do
+		if (( P % MW == 0 )); then
+			echo
+		fi
+		if (( P == SP )); then
+			echo -n "*${MAP:P:1}*"
+		elif (( VP[P] )); then
+			echo -n "[${MAP:P:1}]"
+		else
+			echo -n ".${MAP:P:1}."
+		fi
+	done
+	echo
+}
+
+function CheckAdjacent # Uses P H : Updates Queue, Visited
+{
+	local -i AP=$1
+	if (( VP[AP] )); then
+		return
+	fi
+	HL=${HM%${MAP:AP:1}*}
+	local AH=${#HL}
+	if (( AH >= H - 1 )); then
+		(( QP[QB] = AP ))
+		(( QD[QB++] = D + 1 ))
+		(( VP[AP] = 1 ))
+	fi
+}
+
+function FindShortestRoue
+{
+	local INPUT="$1"
+	local LINE MAP=''
+	local -i MW MH=0 MS # Map Width / Height / Size
+	while read LINE ; do
+		(( MW = ${#LINE} ))
+		MAP+="$LINE"
+		(( MH++ ))
+	done < $INPUT
+	(( MS = MW * MH ))
+	debug "Map is %d x %d\n" $MW $MH
+	local -i P EP SP # Find Start/End Position
+	for (( P = 0 ; P < MS ; P++ )); do
+		if [[ ${MAP:P:1} == 'E' ]]; then
+			(( EP = P ))
+			MAP="${MAP:0:P}z${MAP:P+1}"
+		fi
+		if [[ ${MAP:P:1} == 'S' ]]; then
+			(( SP = P ))
+			MAP="${MAP:0:P}a${MAP:P+1}"
+		fi
+	done
+	local QP=() QD=() VP=() # Queue of positions and distances, Visited positions
+	local -i QB=0 QF=0 # Queue back / front
+	(( QP[QB] = EP ))
+	(( QD[QB++] = 0 ))
+	(( VP[EP] = 1 ))
+	local -i D # Distance
+	local HL HM='abcdefghijklmnopqrstuvwxyz' # Height mapping
+	local -i H
+	while (( QF < QB )); do
+		(( DEBUG )) && PrintQueueMap
+		(( P = QP[QF] ))
+		(( D = QD[QF++] ))
+		HL=${HM%${MAP:P:1}*}
+		(( H = ${#HL} ))
+		if (( H == 0 )); then
+			echo "Shortest route is $D"
+			return 0
+		fi
+		if (( P >= MW             )); then CheckAdjacent $(( P - MW )) ; fi
+		if (( P % MW != MW - 1 )); then CheckAdjacent $(( P + 1     )) ; fi
+		if (( P <  MS - MW        )); then CheckAdjacent $(( P + MW )) ; fi
+		if (( P % MW != 0         )); then CheckAdjacent $(( P - 1     )) ; fi
+	done
+	error "Unreachable!"
+}
+
+FindShortestRoue $INPUT
+
