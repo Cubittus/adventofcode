@@ -1,0 +1,164 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function Compare # Reads LP:LI RP:RI : Sets OK
+{
+	local LI=$1 RI=$2
+	local -i LV=0 RV=0 LVSET=0 RVSET=0
+	while true; do
+		local LC="${LP:LI:1}" RC="${RP:RI:1}"
+		if [[ "$LC" =~ [0-9] ]]; then
+			(( LV = LV * 10 + LC ));
+			(( LI++ ))
+			(( LVSET = 1 ))
+			continue
+		fi
+		if [[ "$RC" =~ [0-9] ]]; then
+			(( RV = RV * 10 + RC ));
+			(( RI++ ))
+			(( RVSET = 1 ))
+			continue
+		fi
+		debug "Compare @ LI=%d RI=%d : %s|%s <=> %s|%s : %s <=> %s : %d <=> %d\n" $LI $RI "${LP:0:LI}" "${LP:LI}" "${RP:0:RI}" "${RP:RI}" "$LC" "$RC" $(( LVSET ? LV : -1 )) $(( RVSET ? RV : -1 ))
+		((DEBUG)) && sleep 0.02
+		if (( LVSET && RVSET )); then
+			if (( LV < RV )); then
+				OK=1
+				debug "Left lower\n"
+				return
+			elif (( LV > RV )); then
+				OK=-1
+				debug "Right lower\n"
+				return
+			fi
+			(( LV = 0 ))
+			(( RV = 0 ))
+			(( LVSET = 0 ))
+			(( RVSET = 0 ))
+			debug "Same\n"
+		fi
+		if (( LVSET )) && [[ "$RC" == '[' ]]; then
+			debug "Add left list\n"
+			local -i BLI
+			(( BLI = LI - ${#LV} ))
+			LP="${LP:0:BLI}[$LV]${LP:LI}"
+			(( LI = BLI ))
+			LC='['
+			(( LV = 0 ))
+			(( LVSET = 0 ))
+		fi
+		if [[ "$LC" == '[' ]] && (( RVSET )); then
+			debug "Add right list\n"
+			local -i BRI
+			(( BRI = RI - ${#RV} ))
+			RP="${RP:0:BRI}[$RV]${RP:RI}"
+			(( RI = BRI ))
+			RC='['
+			(( RV = 0 ))
+			(( RVSET = 0 ))
+		fi
+		if [[ "$LC" == '[' && "$RC" == '[' ]]; then
+			debug "Recurse into list @ %d <=> %d\n" $LI $RI
+			Compare $(( LI + 1 )) $(( RI + 1 ))
+			(( OK != 0 )) && return
+			(( LI = RLI + 1 ))
+			(( RI = RRI + 1 ))
+			debug "Returned from recurse @ %d <=> %d\n" $LI $RI
+			continue
+		fi
+		if (( LVSET )); then
+			debug "Right list ended\n"
+			OK=-1
+			return
+		fi
+		if (( RVSET )); then
+			debug "Left list ended\n"
+			OK=1
+			return
+		fi
+		if [[ "$LC" == ']' && "$RC" == ']' ]]; then
+			debug "Both lists ended\n"
+			(( RLI = LI ))
+			(( RRI = RI ))
+			return
+		fi
+		if [[ "$LC" == ',' && "$RC" == ',' ]]; then
+			debug "Next in list\n"
+			(( LI++ ))
+			(( RI++ ))
+			continue
+		fi
+		if [[ "$RC" == ']' ]]; then
+			debug "Right list short\n"
+			OK=-1 # Right list shorter
+			return
+		fi
+		if [[ "$LC" == ']' ]]; then
+			debug "Left list short\n"
+			OK=1 # Left list shorter
+			return
+		fi
+		debug "WAT\n"
+		exit 1
+	done
+}
+
+function ComparePackets # Reads LP, RP : Sets OK
+{
+	local RRI=0 RLI=0 # Used to return from recursed lists
+	(( OK = 0 ))
+	Compare 0 0 0
+}
+
+function FindOrderedPackets
+{
+	local INPUT="$1"
+	local LINE LPACKETS=() RPACKETS=()
+	local -i I=0 NUMPACKETS
+	while read LINE; do
+		(( I++ ))
+		LPACKETS[I]="$LINE"
+		read LINE
+		RPACKETS[I]="$LINE"
+		read LINE || break
+	done < $INPUT
+	(( NUMPACKETS = I ))
+	local LP RP
+	local -i OK VALID=0
+	for (( I = 1 ; I <= NUMPACKETS ; I++ )); do
+		LP="${LPACKETS[I]}"
+		RP="${RPACKETS[I]}"
+		debug "%3d : %s <=> %s\n" $I "$LP" "$RP"
+		ComparePackets
+		if (( OK == 1 )); then
+			debug "Packet %d order is valid\n" $I
+			(( VALID += I ))
+		else
+			debug "Packet %d order is not valid\n" $I
+		fi
+		debug
+	done
+	printf "Sum of valid packet ids = %d\n" $VALID
+}
+
+FindOrderedPackets $INPUT

@@ -1,0 +1,166 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function Compare # Reads LP:LI RP:RI : Sets OK
+{
+	local LI=$1 RI=$2
+	local -i LV=0 RV=0 LVSET=0 RVSET=0
+	while true; do
+		local LC="${LP:LI:1}" RC="${RP:RI:1}"
+		if [[ "$LC" =~ [0-9] ]]; then
+			(( LV = LV * 10 + LC ));
+			(( LI++ ))
+			(( LVSET = 1 ))
+			continue
+		fi
+		if [[ "$RC" =~ [0-9] ]]; then
+			(( RV = RV * 10 + RC ));
+			(( RI++ ))
+			(( RVSET = 1 ))
+			continue
+		fi
+		if (( LVSET && RVSET )); then
+			if (( LV < RV )); then
+				OK=1
+				return
+			elif (( LV > RV )); then
+				OK=-1
+				return
+			fi
+			(( LV = 0 ))
+			(( RV = 0 ))
+			(( LVSET = 0 ))
+			(( RVSET = 0 ))
+		fi
+		if (( LVSET )) && [[ "$RC" == '[' ]]; then
+			local -i BLI
+			(( BLI = LI - ${#LV} ))
+			LP="${LP:0:BLI}[$LV]${LP:LI}"
+			(( LI = BLI ))
+			LC='['
+			(( LV = 0 ))
+			(( LVSET = 0 ))
+		fi
+		if [[ "$LC" == '[' ]] && (( RVSET )); then
+			local -i BRI
+			(( BRI = RI - ${#RV} ))
+			RP="${RP:0:BRI}[$RV]${RP:RI}"
+			(( RI = BRI ))
+			RC='['
+			(( RV = 0 ))
+			(( RVSET = 0 ))
+		fi
+		if [[ "$LC" == '[' && "$RC" == '[' ]]; then
+			Compare $(( LI + 1 )) $(( RI + 1 ))
+			(( OK != 0 )) && return
+			(( LI = RLI + 1 ))
+			(( RI = RRI + 1 ))
+			continue
+		fi
+		if (( LVSET )); then
+			OK=-1
+			return
+		fi
+		if (( RVSET )); then
+			OK=1
+			return
+		fi
+		if [[ "$LC" == ']' && "$RC" == ']' ]]; then
+			(( RLI = LI ))
+			(( RRI = RI ))
+			return
+		fi
+		if [[ "$LC" == ',' && "$RC" == ',' ]]; then
+			(( LI++ ))
+			(( RI++ ))
+			continue
+		fi
+		if [[ "$RC" == ']' ]]; then
+			OK=-1 # Right list shorter
+			return
+		fi
+		if [[ "$LC" == ']' ]]; then
+			OK=1 # Left list shorter
+			return
+		fi
+		debug "WAT\n"
+		exit 1
+	done
+}
+
+function ComparePackets # Reads LP, RP : Sets OK
+{
+	local RRI=0 RLI=0 # Used to return from recursed lists
+	(( OK = 0 ))
+	Compare 0 0 0
+	#debug "Compare %s <=> %s : %d\n" $LP $RP $OK
+}
+
+function FindOrderedPackets
+{
+	local INPUT="$1"
+	local LINE PACKETS=( [1]='[[2]]' '[[6]]' )
+	local -i I=2 NUMPACKETS
+	while read LINE; do
+		PACKETS[++I]="$LINE"
+		read LINE
+		PACKETS[++I]="$LINE"
+		read LINE || break
+	done < $INPUT
+	(( NUMPACKETS = I ))
+	local LP RP TP
+	local -i I J IP OK
+	for (( I = 2 ; I <= NUMPACKETS ; I++ )); do
+		(( IP = I ))
+		for (( J = I - 1 ; J >= 1 ; J-- )); do
+			LP="${PACKETS[J]}"
+			RP="${PACKETS[IP]}"
+			ComparePackets
+			if (( OK == -1 )); then
+				TP="${PACKETS[IP]}"
+				PACKETS[IP]="${PACKETS[J]}"
+				PACKETS[J]="$TP"
+				(( IP = J ))
+			fi
+		done
+		debug "After I=%d\n" $I
+		for (( J = 1 ; J <= I ; J++ )); do
+			debug "%3d : %s\n" $J "${PACKETS[J]}"
+		done
+		debug
+	done
+	local -i D1I=0 D2I=0
+	for (( I = 1 ; I <= NUMPACKETS ; I++ )); do
+		LINE="${PACKETS[I]}"
+		debug "%3d : %s\n" $I "$LINE"
+		if [[ "$LINE" == '[[2]]' ]]; then
+			(( D1I = I ))
+		elif [[ "$LINE" == '[[6]]' ]]; then
+			(( D2I = I ))
+		fi
+	done
+	debug
+	printf "Decoder key = %d x %d = %d\n" $D1I $D2I $(( D1I * D2I ))
+}
+
+FindOrderedPackets $INPUT
