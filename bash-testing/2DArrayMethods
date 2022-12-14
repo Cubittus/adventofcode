@@ -1,0 +1,181 @@
+#!/bin/bash
+
+TWIDTH=100
+THEIGHT=100
+
+if (( $# >= 1 )); then
+	TWIDTH=$1
+	if (( $# == 2 )); then
+		THEIGHT=$2
+	else
+		THEIGHT=$1
+	fi
+fi
+
+if (( TEST )); then
+	TWIDTH=10
+	THEIGHT=10
+	DEBUG=1
+fi
+printf "Testing map of %d x %d\n" $TWIDTH $THEIGHT
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+
+function TimeStringMap # O(n^2)
+{
+	local MAP=''
+	local -i SIZE X Y P
+	(( SIZE = TWIDTH * THEIGHT ))
+	for (( P = 0 ; P < SIZE ; P++ )); do
+		MAP+='.'
+	done
+	for (( Y = 0 ; Y < THEIGHT ; Y++ )); do
+		if (( Y % 2 )); then
+			for (( X = 0 ; X < TWIDTH ; X++ )); do
+				if (( X % 2 )); then
+					(( P = Y * TWIDTH + X ))
+					MAP="${MAP:0:P}X${MAP:P+1}"
+				fi
+			done
+		fi
+	done
+	for (( Y = 0 ; Y < THEIGHT ; Y++ )); do
+		debug "${MAP:Y*TWIDTH:TWIDTH}\n"
+	done
+}
+
+function TimeArrayChars # O(n)
+{
+	local MAP=()
+	local -i SIZE X Y P
+	(( SIZE = TWIDTH * THEIGHT ))
+	for (( P = 0 ; P < SIZE ; P++ )); do
+		MAP[P]='.'
+	done
+	for (( Y = 0 ; Y < THEIGHT ; Y++ )); do
+		if (( Y % 2 )); then
+			for (( X = 0 ; X < TWIDTH ; X++ )); do
+				if (( X % 2 )); then
+					(( P = Y * TWIDTH + X ))
+					MAP[P]='X'
+				fi
+			done
+		fi
+	done
+	for (( Y = 0 ; Y < THEIGHT ; Y++ )); do
+		for (( X = 0 ; X < TWIDTH ; X++ )); do
+			(( P = Y * TWIDTH + X ))
+			debug "${MAP[P]}"
+		done
+		debug
+	done
+}
+
+function TimeArrayNums # O(n)
+{
+	local MAP=()
+	local -i SIZE X Y P
+	(( SIZE = TWIDTH * THEIGHT ))
+	for (( P = 0 ; P < SIZE ; P++ )); do
+		(( MAP[P] = 0 ))
+	done
+	for (( Y = 0 ; Y < THEIGHT ; Y++ )); do
+		if (( Y % 2 )); then
+			for (( X = 0 ; X < TWIDTH ; X++ )); do
+				if (( X % 2 )); then
+					(( P = Y * TWIDTH + X ))
+					(( MAP[P] = 1 ))
+				fi
+			done
+		fi
+	done
+	for (( Y = 0 ; Y < THEIGHT ; Y++ )); do
+		for (( X = 0 ; X < TWIDTH ; X++ )); do
+			(( P = Y * TWIDTH + X ))
+			if (( MAP[P] )); then
+				debug 'X'
+			else
+				debug '.'
+			fi
+		done
+		debug
+	done
+}
+
+function TimeArrayStrings # O(n) Fastest even with width >> height
+{
+	local MAP=()
+	local -i SIZE
+	local ROW=''
+	(( SIZE = TWIDTH * THEIGHT ))
+	for (( X = 0; X < TWIDTH ; X++ )); do
+		ROW+='.'
+	done
+	for (( Y = 0 ; Y < THEIGHT ; Y++ )); do
+		MAP[Y]="$ROW"
+	done
+	for (( Y = 0 ; Y < THEIGHT ; Y++ )); do
+		if (( Y % 2 )); then
+			for (( X = 0 ; X < TWIDTH ; X++ )); do
+				if (( X % 2 )); then
+					MAP[Y]="${MAP[Y]:0:X}X${MAP[Y]:X+1}"
+				fi
+			done
+		fi
+	done
+	for (( Y = 0 ; Y < THEIGHT ; Y++ )); do
+		debug "${MAP[Y]}\n"
+	done
+}
+
+function TimeAssocArrayChars # O(n)
+{
+	local -A MAP=()
+	local -i SIZE X Y
+	for (( Y = 0 ; Y < THEIGHT ; Y++ )); do
+		for (( X = 0 ; X < TWIDTH ; X++ )); do
+			MAP[$X,$Y]='.'
+		done
+	done
+	for (( Y = 0 ; Y < THEIGHT ; Y++ )); do
+		if (( Y % 2 )); then
+			for (( X = 0 ; X < TWIDTH ; X++ )); do
+				if (( X % 2 )); then
+					MAP[$X,$Y]='X'
+				fi
+			done
+		fi
+	done
+	for (( Y = 0 ; Y < THEIGHT ; Y++ )); do
+		for (( X = 0 ; X < TWIDTH ; X++ )); do
+			debug "${MAP[$X,$Y]}"
+		done
+		debug
+	done
+}
+
+
+echo "StringMap"
+time TimeStringMap > /dev/null
+echo
+echo "ArrayChars"
+time TimeArrayChars > /dev/null
+echo
+echo "ArrayNums"
+time TimeArrayNums > /dev/null
+echo
+echo "ArrayStrings"
+time TimeArrayStrings > /dev/null
+echo
+echo "AssocArrayChars"
+time TimeAssocArrayChars > /dev/null
+echo
