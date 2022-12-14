@@ -1,0 +1,163 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadMap
+{
+	local INPUT="$1"
+	local LINE XY
+	local -i LX=() LY1=() LY2=() LY=() LX1=() LX2=() # Vertical lines LX,LY1-LX-LY2  Horizontal lines LX1,LY-LX2,LY
+	local -i VLINES=0 HLINES=0 X1 Y1 X2 Y2
+	(( XMIN = 500 ))
+	(( XMAX = 500 ))
+	(( HEIGHT = 0 ))
+	local IFS=' >-'
+	while read LINE ; do
+		(( X1 = 0 ))
+		for XY in $LINE ; do
+			if [[ ! "$XY" ]]; then
+				continue;
+			fi
+			(( X2 = ${XY%,*} ))
+			(( Y2 = ${XY#*,} ))
+			(( X2 < XMIN )) && (( XMIN = X2 ))
+			(( X2 > XMAX )) && (( XMAX = X2 ))
+			(( Y2 > HEIGHT )) && (( HEIGHT = Y2 ))
+			if (( X1 )); then
+				if (( X1 == X2 )); then
+					(( LX[VLINES]  = X1 ))
+					if (( Y1 < Y2 )); then
+						(( LY1[VLINES] = Y1 ))
+						(( LY2[VLINES] = Y2 ))
+					else
+						(( LY1[VLINES] = Y2 ))
+						(( LY2[VLINES] = Y1 ))
+					fi
+					(( VLINES++ ))
+				elif (( Y1 == Y2 )); then
+					(( LY[HLINES]=Y1 ))
+					if (( X1 < X2 )); then
+						(( LX1[HLINES] = X1 ))
+						(( LX2[HLINES] = X2 ))
+					else
+						(( LX1[HLINES] = X2 ))
+						(( LX2[HLINES] = X1 ))
+					fi
+					(( HLINES++ ))
+				else
+					error "Diagonal %d,%d -> %d,%d\n" $X1 $Y1 $X2 $Y2
+				fi
+			fi
+			(( X1 = X2 ))
+			(( Y1 = Y2 ))
+		done
+	done < $INPUT
+	(( HEIGHT = HEIGHT + 2 ))
+	(( XMIN > 500 - HEIGHT )) && (( XMIN = 500 - HEIGHT ))
+	(( XMAX < 500 + HEIGHT )) && (( XMAX = 500 + HEIGHT ))
+	local -i X Y I
+	local ROCK=''
+	LINE=''
+	for (( X = XMIN ; X <= XMAX ; X++ )); do
+		LINE+='.'
+		ROCK+='#'
+	done
+	for (( Y = 0 ; Y <= HEIGHT - 1 ; Y++ )); do
+		MAP[Y]="$LINE"
+	done
+	MAP[HEIGHT]="$ROCK"
+	MAP[0]="${MAP:0:500-XMIN}+${MAP:501-XMIN}"
+	for (( I = 0 ; I < VLINES ; I++ )); do
+		(( X = LX[I] - XMIN ))
+		for (( Y = LY1[I] ; Y <= LY2[I] ; Y++ )); do
+			MAP[Y]="${MAP[Y]:0:X}#${MAP[Y]:X+1}"
+		done
+	done
+	for (( I = 0 ; I < HLINES ; I++ )); do
+		MAP[LY[I]]="${MAP[LY[I]]:0:LX1[I]-XMIN}${ROCK:0:LX2[I]-LX1[I]+1}${MAP[LY[I]]:LX2[I]-XMIN+1}"
+	done
+}
+
+function DrawMap
+{
+	debug
+	debug "Map is %d - %d | %d : Sand = %d\n" $XMIN $XMAX $HEIGHT $SAND
+	for (( Y = 0 ; Y <= HEIGHT ; Y++ )); do
+		debug "%3d %s\n" $Y "${MAP[Y]}"
+	done
+}
+
+function DropSand # Return 0 if sand stops on map else return 1
+{
+	local -i XW
+	(( XW = XMAX - XMIN ))
+	while (( SY < HEIGHT && SX >= 0 && SX <= XW )); do
+		if [[ "${MAP[SY+1]:SX:1}" == '.' ]]; then
+			(( SY++ ))
+			continue
+		elif [[ "${MAP[SY+1]:SX-1:1}" == '.' ]]; then
+			(( SX-- ))
+			(( SY++ ))
+			continue
+		elif [[ "${MAP[SY+1]:SX+1:1}" == '.' ]]; then
+			(( SX++ ))
+			(( SY++ ))
+			continue
+		else
+			MAP[SY]="${MAP[SY]:0:SX}o${MAP[SY]:SX+1}"
+			if (( SY == 0 )); then
+				return 1
+			fi
+			return 0
+		fi
+	done
+	return 1
+}
+
+function PourSand
+{
+	local -i SX SY
+	while true; do
+		(( SX = 500 - XMIN ))
+		(( SY = 0 ))
+		(( SAND++ ))
+		if ! DropSand ; then
+			return
+		fi
+		(( TEST || DEBUG && SAND % 1000 == 0 )) && DrawMap
+	done
+}
+
+function CountSand
+{
+	local INPUT="$1"
+	local MAP=()
+	local -i XMIN XMAX HEIGHT SAND=0
+	ReadMap $INPUT
+	(( DEBUG )) && DrawMap
+	PourSand
+	(( DEBUG )) && DrawMap
+	printf "Sand is static after %d units\n" $SAND
+}
+
+CountSand $INPUT
+
