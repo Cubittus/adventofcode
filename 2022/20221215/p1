@@ -1,0 +1,126 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadSensors
+{
+	local LINE
+	local -i BX BY I DX DY
+	local RE='^Sensor at x=([-0-9]+), y=([-0-9]+): closest beacon is at x=([-0-9]+), y=([-0-9]+)$'
+	while read LINE ; do
+		if [[ "$LINE" =~ $RE ]]; then
+			(( SENSORX[NUMSENSORS] = BASH_REMATCH[1] ))
+			(( SENSORY[NUMSENSORS] = BASH_REMATCH[2] ))
+			(( BX = BASH_REMATCH[3] ))
+			(( BY = BASH_REMATCH[4] ))
+			(( SENSORBEACON[NUMSENSORS] = -1 ))
+			for (( I = 0 ; I < NUMBEACONS ; I++ )); do
+				if (( BEACONX[I] == BX && BEACONY[I] == BY )); then
+					(( SENSORBEACON[NUMSENSORS] = I ))
+					break
+				fi
+			done
+			if (( SENSORBEACON[NUMSENSORS] == -1 )); then
+				(( BEACONX[NUMBEACONS] = BX ))
+				(( BEACONY[NUMBEACONS] = BY ))
+				(( SENSORBEACON[NUMSENSORS] = NUMBEACONS ))
+				(( NUMBEACONS++ ))
+			fi
+			(( DX = SENSORX[NUMSENSORS] - BX ))
+			(( DY = SENSORY[NUMSENSORS] - BY ))
+			(( DX < 0 )) && (( DX = -DX ))
+			(( DY < 0 )) && (( DY = -DY ))
+			(( SENSORRANGE[NUMSENSORS] = DX + DY ))
+			(( NUMSENSORS++ ))
+		else
+			error "Invalid line [%s]\n" "$LINE"
+			exit 1
+		fi
+	done
+}
+
+function PrintData
+{
+	local -i I
+	for (( I = 0 ; I < NUMBEACONS ; I++ )); do
+		printf "Beacon %2d at %7d x %7d\n" $I ${BEACONX[I]} ${BEACONY[I]}
+	done
+	for (( I = 0 ; I < NUMSENSORS ; I++ )); do
+		printf "Sensor %2d at %7d x %7d sees beacon %2d at range %7d\n" $I ${SENSORX[I]} ${SENSORY[I]} ${SENSORBEACON[I]} ${SENSORRANGE[I]}
+	done
+}
+
+function MeasureRowCoverage
+{
+	local -i ROW=$1
+	local -i I DY XR X0 X1
+	local -i RANGESTART=() RANGEEND=() RI=0 R
+	for (( I = 0 ; I < NUMBEACONS ; I++ )); do
+		if (( BEACONY[I] == ROW )); then
+			(( BEACONSONROW++ ))
+		fi
+	done
+	for (( I = 0 ; I < NUMSENSORS ; I++ )); do
+		(( DY = SENSORY[I] - ROW ))
+		(( DY < 0 )) && (( DY = -DY ))
+		if (( DY > SENSORRANGE[I] )); then
+			debug "Sensor %2d is out of range of row %d at distance %d > %d\n" $I $ROW $DY ${SENSORRANGE[I]}
+		else
+			(( XR = SENSORRANGE[I] - DY ))
+			(( X0 = SENSORX[I] - XR ))
+			(( X1 = SENSORX[I] + XR ))
+			debug "Sensor %d covers row %d at %d - %d\n" $I $ROW $X0 $X1
+			for R in ${!RANGESTART[@]} ; do
+				(( X0 > RANGEEND[R] || X1 < RANGESTART[R] )) && continue
+				debug "Merging with range %2d : %d - %d\n" $R ${RANGESTART[R]} ${RANGEEND[R]}
+				(( X0 > RANGESTART[R] )) && (( X0 = RANGESTART[R] ))
+				(( X1 < RANGEEND[R] )) && (( X1 = RANGEEND[R] ))
+				unset RANGESTART[R]
+				unset RANGEEND[R]
+			done
+			(( RANGESTART[RI] = X0 ))
+			(( RANGEEND[RI] = X1 ))
+			debug "New range %d : %d - %d\n" $RI $X0 $X1
+			(( RI++ ))
+		fi
+	done
+	for R in ${!RANGESTART[@]} ; do
+		(( ROWCOVERAGE += RANGEEND[R] - RANGESTART[R] + 1 ))
+	done
+	
+}
+
+function EliminatePositions
+{
+	local INPUT="$1"
+	local ROW=2000000
+	local -i SENSORX=() SENSORY=() BEACONX=() BEACONY=() SENSORBEACON=() SENSORRANGE=()
+	local -i NUMSENSORS NUMBEACONS BEACONSONROW=0 ROWCOVERAGE=0
+	((TEST)) && ROW=10
+	ReadSensors < $INPUT
+	(( DEBUG )) && PrintData
+	MeasureRowCoverage $ROW
+	printf "On row %d there are %d beacons and coverage is %d, so there are %d positions where a beacon cannot be present\n" $ROW $BEACONSONROW $ROWCOVERAGE $(( ROWCOVERAGE - BEACONSONROW ))
+}
+
+EliminatePositions $INPUT
+
