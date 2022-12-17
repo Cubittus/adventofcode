@@ -1,0 +1,205 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+declare CAVEROW=() ROW
+function init
+{
+	local -i V
+	for (( V = 0 ; V <= 2#1111111 ; V++ )); do
+		ROW=''
+		(( V & 2#1000000 )) && ROW+='#' || ROW+='.'
+		(( V & 2#0100000 )) && ROW+='#' || ROW+='.'
+		(( V & 2#0010000 )) && ROW+='#' || ROW+='.'
+		(( V & 2#0001000 )) && ROW+='#' || ROW+='.'
+		(( V & 2#0000100 )) && ROW+='#' || ROW+='.'
+		(( V & 2#0000010 )) && ROW+='#' || ROW+='.'
+		(( V & 2#0000001 )) && ROW+='#' || ROW+='.'
+		CAVEROW[V]="$ROW"
+	done
+}
+
+function JetRock
+{
+	local J
+	local -i R
+	J="${JETS:JETPOS++:1}"
+	(( JETPOS %= JETLEN ))
+	if [[ "$J" == '<' ]]; then
+		if (( XL > 0 )); then
+			if (( Y < TH )); then # Check if other rock blocks move
+				for (( R = 0 ; R < RH ; R++ )); do
+					if (( ( ROCK[R] << 1 ) & CAVE[Y+R] )); then
+						return
+					fi
+				done
+			fi
+			for (( R = 0; R < RH ; R++ )); do
+				(( ROCK[R] <<= 1 ))
+			done
+			(( XL-- ))
+			(( XR++ ))
+		fi
+	else
+		if (( XR > 0 )); then
+			if (( Y < TH )); then # Check if other rock blocks move
+				for (( R = 0 ; R < RH ; R++ )); do
+					if (( ( ROCK[R] >> 1 ) & CAVE[Y+R] )); then
+						return
+					fi
+				done
+			fi
+			for (( R = 0; R < RH ; R++ )); do
+				(( ROCK[R] >>= 1 ))
+			done
+			(( XR-- ))
+			(( XL++ ))
+		fi
+	fi
+}
+
+function FallRock
+{
+	if (( Y == 0 )); then return 1 ; fi
+	local -i R
+	for (( R = 0 ; R < RH ; R++ )); do
+		if (( ROCK[R] & CAVE[Y+R-1] )); then
+			return 1
+		fi
+	done
+	(( Y-- ))
+	return 0
+}
+
+function PlaceRock
+{
+	local -i R
+	for (( R = 0 ; R < RH ; R++ )); do
+		(( CAVE[Y+R] |= ROCK[R] ))
+	done
+	(( TH < Y + RH )) && (( TH = Y + RH ))
+}
+
+function DropRock
+{
+	local -i XL=2 XR Y
+	(( XR = 5 - RW ))
+	(( Y = TH + 3 ))
+	while true; do
+		JetRock
+		FallRock || break
+	done
+	PlaceRock
+}
+
+function DropHLine
+{
+	local -i ROCK=( 2#0011110 ) RW=4 RH=1
+	DropRock
+}
+
+function DropPlus
+{
+	local -i ROCK=( 2#0001000 2#0011100 2#0001000 ) RH=3 RW=3
+	DropRock
+}
+
+function DropL
+{
+	local -i ROCK=( 2#0011100 2#0000100 2#0000100 ) RH=3 RW=3
+	DropRock
+}
+
+function DropVLine
+{
+	local -i ROCK=( 2#0010000 2#0010000 2#0010000 2#0010000 ) RH=4 RW=1
+	DropRock
+}
+
+function DropBox
+{
+	local -i ROCK=( 2#0011000 2#0011000 ) RH=2 RW=2
+	DropRock
+}
+
+function DropNextRock
+{
+	case $(( R % 5 )) in
+		0 ) DropHLine ;;
+		1 ) DropPlus  ;;
+		2 ) DropL     ;;
+		3 ) DropVLine ;;
+		4 ) DropBox   ;;
+	esac
+}
+
+function PrintCave
+{
+	local -i Y
+	local ROW
+	if (( TH > 50 )); then
+		printf "After %d rocks cave is %d units high (increase of %d)\n" $((R+1)) $(( TH + AH )) $IH
+		(( LH = TH ))
+	else
+		for (( Y = TH-1 ; Y >= 0 ; Y-- )); do
+			printf "|%s|\n" "${CAVEROW[CAVE[Y]]}"
+		done
+		printf "+-------+\n\n"
+	fi
+}
+
+function PlayVulctris
+{
+	local INPUT="$1"
+	local MAXROCKS=1000000000000 MOD=7
+	init
+	local JETS
+	read JETS < $INPUT
+	local -i CAVE=() # Bitmap 6.....0
+	local -i JETPOS=0 JETLEN=${#JETS}
+	local -i R TH=0 LH=0 IH=0 AH=0
+	local -i CYCLE
+	(( CYCLE = JETLEN * MOD ))
+	for (( R = 0 ; R < CYCLE * 4 ; R++ )); do
+		DropNextRock
+		(( (R+1) % CYCLE == 0 )) && PrintCave
+		(( (R+1) % CYCLE == 0 )) && (( LH = TH ))
+		(( LH < TH )) && (( IH = TH - LH ))
+	done
+	local -i SKIPS
+	(( SKIPS = MAXROCKS / CYCLE - 6 ))
+	(( R += CYCLE * SKIPS ))
+	(( AH = SKIPS * IH ))
+	printf "Skipping %d cycles of %d rocks with height %d : Total %d rocks, %d height\n" $SKIPS $CYCLE $IH $(( CYCLE * SKIPS )) $AH
+	for ((  ; R < MAXROCKS ; R++ )); do
+		DropNextRock
+		(( (R+1) % CYCLE == 0 )) && PrintCave
+		(( (R+1) % CYCLE == 0 )) && (( LH = TH ))
+		(( LH < TH )) && (( IH = TH - LH ))
+	done
+	((R--))
+	PrintCave
+	Nurp
+}
+
+PlayVulctris $INPUT
+
