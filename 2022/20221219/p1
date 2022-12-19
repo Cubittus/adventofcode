@@ -1,0 +1,76 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadBlueprints
+{
+	local LINE RE='^Blueprint ([0-9]+): Each ore robot costs ([0-9]+) ore. Each clay robot costs ([0-9]+) ore. Each obsidian robot costs ([0-9]+) ore and ([0-9]+) clay. Each geode robot costs ([0-9]+) ore and ([0-9]+) obsidian.$'
+	local -i BP=0
+	while read LINE ; do
+		if [[ "$LINE" =~ $RE ]]; then
+			(( BP++ ))
+			(( BASH_REMATCH[1] != BP )) && error "Blue print sequence error [%d != %d]\n" "${BASH_REMATCH[1]}" $BP
+			ROBORECOSTORE[BP]=${BASH_REMATCH[2]}
+			ROBCLYCOSTORE[BP]=${BASH_REMATCH[3]}
+			ROBOBSCOSTORE[BP]=${BASH_REMATCH[4]}
+			ROBOBSCOSTCLY[BP]=${BASH_REMATCH[5]}
+			ROBGEOCOSTORE[BP]=${BASH_REMATCH[6]}
+			ROBGEOCOSTOBS[BP]=${BASH_REMATCH[7]}
+		else
+			error "Could not parse [%s]\n" "$LINE"
+		fi
+	done
+	(( NUMBLUEPRINTS = BP ))
+}
+
+function PrintBlueprints
+{
+	local -i BP
+	printf "There are %d blueprints\n" $NUMBLUEPRINTS
+	for (( BP = 1 ; BP <= NUMBLUEPRINTS ; BP++ )); do
+		printf "%2d : OreRobot %2d Ore : ClyRobot %2d Ore : ObsRobot %2d Ore %2d Cly : GeoRobot %2d Ore %2d Obs\n" \
+			$BP ${ROBORECOSTORE[BP]} ${ROBCLYCOSTORE[BP]} ${ROBOBSCOSTORE[BP]} ${ROBOBSCOSTCLY[BP]} ${ROBGEOCOSTORE[BP]} ${ROBGEOCOSTOBS[BP]}
+	done
+}
+
+# State:
+# TIMELEFT - Minutes remaining
+# ROBORE   - Number of ore robots
+# ROBCLY   - Number of clay robots
+# ROBOBS   - Number of obsidian robots
+# ROBGEO   - Number of geode robots
+# NUMORE   - Number of ore
+# NUMCLY   - Number of clay
+# NUMOBS   - Number of obsidian
+# NUMGEO   - Number of geodes
+
+function OptimiseRobots
+{
+	local INPUT="$1"
+	local -i NUMBLUEPRINTS=0
+	local -i ROBORECOSTORE=() ROBCLYCOSTORE=() ROBOBSCOSTORE=() ROBOBSCOSTCLY=() ROBGEOCOSTORE=() ROBGEOCOSTOBS=()
+	ReadBlueprints < $INPUT
+	(( DEBUG )) && PrintBlueprints
+
+}
+
+OptimiseRobots $INPUT ; exit $?
