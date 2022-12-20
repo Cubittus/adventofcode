@@ -1,0 +1,115 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadStuff
+{
+	local LINE RE='^(-?[0-9]+)$'
+	local -i N=0
+	while read LINE ; do
+		if [[ "$LINE" =~ $RE ]]; then
+			(( NUM[N] = BASH_REMATCH[1] ))
+			(( PN[N] = N - 1 )) # Index of prev number
+			(( NN[N] = N + 1 )) # Index of next number
+			(( NUM[N] == 0 )) && (( ZERO = N ))
+			(( N++ ))
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+	(( NUMNUMS = N ))
+	# Close circlular list
+	(( PN[0] = N - 1 ))
+	(( NN[N-1] = 0 ))
+}
+
+function NumList
+{
+	local -i N=0 I
+	for (( I = 0; I < NUMNUMS ; I++ )); do
+		printf "%d<-(%d=%d)->%d " ${PN[N]} $N ${NUM[N]} ${NN[N]}
+		(( N = NN[N] ))
+	done
+	echo
+}
+
+function Decrypt
+{
+	local -i N I MOVE OPN ONN NPN NNN DIR
+	for (( N = 0; N < NUMNUMS ; N++ )); do
+		(( N % 100 == 0 )) && printf "@ N = %d\n" $N
+		(( MOVE = NUM[N] ))
+		if (( MOVE == 0 )); then
+			continue
+		fi
+		# Old Prev/Next
+		(( OPN = PN[N] ))
+		(( ONN = NN[N] ))
+		# Remove
+		(( NN[OPN] = ONN ))
+		(( PN[ONN] = OPN ))
+		# Find New Prev/Next
+		if (( MOVE > 0 )); then
+			(( NPN = OPN ))
+			for (( I = 0 ; I < MOVE ; I++ )); do
+				(( NPN = NN[NPN] ))
+			done
+			(( NNN = NN[NPN] ))
+		else
+			(( NNN = ONN ))
+			for (( I = 0 ; I > MOVE ; I-- )); do
+				(( NNN = PN[NNN] ))
+			done
+			(( NPN = PN[NNN] ))
+		fi
+		# Insert
+		(( PN[N] = NPN ))
+		(( NN[N] = NNN ))
+		(( NN[NPN] = N ))
+		(( PN[NNN] = N ))
+	done
+}
+
+function FindCoords
+{
+	local -i N=$ZERO I
+	for (( I = 1 ; I <= 3000 ; I++ )); do
+		(( N = NN[N] ))
+		if (( I % 1000 == 0 )); then
+			(( COORDS[I/1000] = NUM[N] ))
+		fi
+	done
+}
+
+function FindGrove
+{
+	local INPUT="$1"
+	local -i NUMNUMS=0 NUM=() PN=() NN=() ZERO COORDS=()
+	ReadStuff < $INPUT
+	debug "There are %d numbers : %s\n" $NUMNUMS "$( NumList )"
+	Decrypt
+	debug "After decrypting positions are: %s\n" "$( NumList )"
+	FindCoords
+	printf "Coordinates are %d, %d, %d : sum = %d\n" ${COORDS[@]} $(( COORDS[1] + COORDS[2] + COORDS[3] ))
+}
+
+FindGrove $INPUT ; exit $?
