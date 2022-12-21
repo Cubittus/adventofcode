@@ -1,0 +1,76 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadMonkeys
+{
+	local LINE RENUM='^([a-z]{4}): ([0-9]+)$' RECALC='^([a-z]{4}): ([a-z]{4}) ([-+/*]) ([a-z]{4})$'
+	while read LINE ; do
+		if [[ "$LINE" =~ $RENUM ]]; then
+			(( VALUE[${BASH_REMATCH[1]}] = BASH_REMATCH[2] ))
+			debug "Monkey %s yells %d\n" ${BASH_REMATCH[1]} ${BASH_REMATCH[2]}
+		elif [[ "$LINE" =~ $RECALC ]]; then
+			CALCA[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}
+			CALCOP[${BASH_REMATCH[1]}]=${BASH_REMATCH[3]}
+			CALCB[${BASH_REMATCH[1]}]=${BASH_REMATCH[4]}
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+}
+
+function CalcMonkey
+{
+	local M="$1"
+	local MA="${CALCA[$M]}"
+	if [[ ! -v VALUE[$MA] ]]; then
+		CalcMonkey $MA
+	fi
+	local MB="${CALCB[$M]}"
+	if [[ ! -v VALUE[$MB] ]]; then
+		CalcMonkey $MB
+	fi
+	local -i A B
+	(( A = VALUE[$MA] ))
+	(( B = VALUE[$MB] ))
+	(( VALUE[$M] = A ${CALCOP[$M]} B ))
+	debug "Monkey %s yells %s %s %s = %d %s %d = %d\n" $M $MA "${CALCOP[$M]}" $MB $A "${CALCOP[$M]}" $B ${VALUE[$M]}
+}
+
+function CalcRoot
+{
+	CalcMonkey 'root'
+}
+
+function MonkeyCalc
+{
+	local INPUT="$1"
+	local -i NUMVAL=0 NUMCALC=0
+	local -A -i VALUE=()
+	local -A CALCA=() CALCOP=() CALCB=()
+	ReadMonkeys < $INPUT
+	debug "There are %d monkeys with numbers and %d with calcs\n" ${#VALUE[*]} ${#CALCA[*]}
+	CalcRoot
+	printf "Root monkey will yell %d\n" ${VALUE['root']}
+}
+
+MonkeyCalc $INPUT ; exit $?

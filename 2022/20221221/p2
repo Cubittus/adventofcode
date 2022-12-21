@@ -1,0 +1,101 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadMonkeys
+{
+	local LINE RENUM='^([a-z]{4}): ([0-9]+)$' RECALC='^([a-z]{4}): ([a-z]{4}) ([-+/*]) ([a-z]{4})$'
+	local -i CM=0
+	while read LINE ; do
+		if [[ "$LINE" =~ $RENUM ]]; then
+			(( VALUE[${BASH_REMATCH[1]}] = BASH_REMATCH[2] ))
+			debug "Monkey %s yells %d\n" ${BASH_REMATCH[1]} ${BASH_REMATCH[2]}
+		elif [[ "$LINE" =~ $RECALC ]]; then
+			CALCA[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}
+			CALCOP[${BASH_REMATCH[1]}]=${BASH_REMATCH[3]}
+			CALCB[${BASH_REMATCH[1]}]=${BASH_REMATCH[4]}
+			CALCMONKEY[CM++]=${BASH_REMATCH[1]}
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+}
+
+function CalcMonkey
+{
+	local M="$1"
+	local MA="${CALCA[$M]}"
+	if [[ ! -v VALUE[$MA] ]]; then
+		CalcMonkey $MA
+	fi
+	local MB="${CALCB[$M]}"
+	if [[ ! -v VALUE[$MB] ]]; then
+		CalcMonkey $MB
+	fi
+	local -i A B
+	(( A = VALUE[$MA] ))
+	(( B = VALUE[$MB] ))
+	(( VALUE[$M] = A ${CALCOP[$M]} B ))
+	#debug "Monkey %s yells %s %s %s = %d %s %d = %d\n" $M $MA "${CALCOP[$M]}" $MB $A "${CALCOP[$M]}" $B ${VALUE[$M]}
+}
+
+function ResetCalcs
+{
+	local M
+	for M in ${CALCMONKEY[@]}; do
+		unset VALUE[$M]
+	done
+}
+
+function CalcHuman
+{
+	local RA=${CALCA['root']} RB=${CALCB['root']}
+	local -i HVAL=1 BVAL N=0
+	CalcMonkey $RB
+	(( BVAL = VALUE[$RB] ))
+	while true; do
+		(( N++ ))
+		(( VALUE['humn'] = HVAL ))
+		CalcMonkey $RA
+		if (( VALUE[$RA] == BVAL )); then
+			break
+		fi
+		(( N % 100 == 0 )) && printf "@ %6d : %15d != %15d : diff %d\n" $HVAL ${VALUE[$RA]} $BVAL $(( VALUE[$RA] - BVAL ))
+		(( HVAL = HVAL + 1 + ( VALUE[$RA] - BVAL ) / 100 ))
+		ResetCalcs
+	done
+	printf "Human needs to yell %d\n" $HVAL
+}
+
+function MonkeyCalc
+{
+	local INPUT="$1"
+	local -i NUMVAL=0 NUMCALC=0
+	local -A -i VALUE=()
+	local -A CALCA=() CALCOP=() CALCB=()
+	local CALCMONKEY=()
+	ReadMonkeys < $INPUT
+	debug "There are %d monkeys with numbers and %d with calcs\n" ${#VALUE[*]} ${#CALCA[*]}
+	CalcHuman
+}
+
+MonkeyCalc $INPUT ; exit $?
