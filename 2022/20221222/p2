@@ -1,0 +1,145 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadMap
+{
+	local LINE RE='^[ .#]+$' C
+	local -i X Y=0 XW XR=() XL=() YT=() YB=()
+	local IFS=$'\n'
+	while read LINE ; do
+		[[ "$LINE" = '' ]] && break
+		debug "Read Map [%s]\n" "$LINE"
+		[[ ! "$LINE" =~ $RE ]] && error "Could not parse '%s'\n" "$LINE"
+		(( Y += 250 ))
+		(( XW = ${#LINE} ))
+		(( XW > MAXX )) && (( MAXX = X ))
+		for (( X = 1 ; X <= XW ; X++ )); do
+			C="${LINE:X-1:1}"
+			[[ "$C" == ' ' ]] && continue
+			[[ "$C" == '.' ]] && (( MAP[Y+X] = 1 ))
+			[[ "$C" == '#' ]] && (( MAP[Y+X] = 0 ))
+			(( ! XL[Y] )) && (( XL[Y] = X ))
+			(( XR[Y] = X ))
+			(( ! YT[X] )) && (( YT[X] = Y ))
+			(( YB[X] = Y ))
+		done
+	done
+	(( MAXY = Y ))
+	debug "Right  : %s\n" "${XR[@]@K}"
+	debug "Bottom : %s\n" "${YB[@]@K}"
+	debug "Left   : %s\n" "${XL[@]@K}"
+	debug "Top    : %s\n" "${YT[@]@K}"
+	for (( Y = 250 ; Y <= MAXY ; Y += 250 )); do
+		for (( X = 1 ; X <= MAXX ; X++ )); do
+			# Need to rearrange edges
+			[[ -v MAP[Y+X] ]] || continue
+			# Right
+			if [[ -v MAP[Y+X+1] ]]; then
+				(( MAPR[Y+X] = Y + X + MAP[Y+X+1] ))
+			else
+				(( MAPR[Y+X] = Y + ( MAP[Y+XL[Y]] ? XL[Y] : X ) ))
+			fi
+			# Down
+			if [[ -v MAP[Y+X+250] ]]; then
+				(( MAPD[Y+X] = Y + X + MAP[Y+X+250] * 250 ))
+			else
+				(( MAPD[Y+X] = ( MAP[YT[X]+X] ? YT[X] : Y ) + X ))
+			fi
+			# Left
+			if [[ -v MAP[Y+X-1] ]]; then
+				(( MAPL[Y+X] = Y + X + MAP[Y+X-1] * -1 ))
+			else
+				(( MAPL[Y+X] = Y + ( MAP[Y+XR[Y]] ? XR[Y] : X ) ))
+			fi
+			# Up
+			if [[ -v MAP[Y+X-250] ]]; then
+				(( MAPU[Y+X] = Y + X + MAP[Y+X-250] * -250 ))
+			else
+				(( MAPU[Y+X] = ( MAP[YB[X]+X] ? YB[X] : Y ) + X ))
+			fi
+		done
+	done
+	(( STARTPOS = 250 + XL[250] ))
+	debug "Starting at %d\n" $STARTPOS
+}
+
+function ReadRoute
+{
+	local LINE DIGIT='^[0-9]$'
+	local -i I LL MOVE=0
+	read LINE
+	(( LL = ${#LINE} ))
+	for (( I = 0 ; I < LL ; I++ )); do
+		(( MOVE = ${LINE:I:1} ))
+		if [[ "${LINE:I+1:1}" =~ $DIGIT ]]; then
+			(( MOVE = ${LINE:I:2} ))
+			(( I++ ))
+		fi
+		(( I++ ))
+		(( ROUTE[ROUTELEN++] = MOVE ))
+		(( I < LL )) || break
+		case "${LINE:I:1}" in
+			R ) (( ROUTE[ROUTELEN++] =  1 )) ;;
+			L ) (( ROUTE[ROUTELEN++] = -1 )) ;;
+			* ) error "Bad route at %d : [%s]\n" $I ${LINE:I:3}
+		esac
+	done
+	debug "Route: %s\n" "${ROUTE[*]}"
+}
+
+function ReadMapAndRoute
+{
+	ReadMap
+	ReadRoute
+}
+
+function FollowMap
+{
+	local -i POS=$STARTPOS FACE=0 R MOVE M
+	local FACEMAP=( [0]='MAPR' [1]='MAPD' [2]='MAPL' [3]='MAPU' )
+	local -n MAPNEXT=${FACEMAP[FACE]}
+	for (( R = 0 ; R < ROUTELEN ; R++ )); do
+		debug "At %d facing %d ; next move is %d then turn %d\n" $POS $FACE ${ROUTE[R]} ${ROUTE[R+1]}
+		(( MOVE = ROUTE[R] ))
+		for (( M = 0 ; M < MOVE ; M++ )); do
+			debug "At %d facing %d : moving to %d\n" $POS $FACE ${MAPNEXT[POS]}
+			(( POS = MAPNEXT[POS] ))
+		done
+		(( R++ ))
+		(( R < ROUTELEN )) || break
+		(( FACE = ( FACE + ROUTE[R] + 4 ) % 4 ))
+		local -n MAPNEXT=${FACEMAP[FACE]}
+	done
+	printf "Final position is %d facing %d : Password = %d\n" $POS $FACE $((POS * 4 + FACE))
+}
+
+function FindPassword
+{
+	local INPUT="$1"
+	local -i MAP=() MAPR=() MAPD=() MAPL=() MAPU=() MAXX=0 MAXY=0 STARTPOS=0
+	local -i ROUTE=() ROUTELEN=0
+	ReadMapAndRoute < $INPUT
+	FollowMap
+}
+
+FindPassword $INPUT ; exit $?
