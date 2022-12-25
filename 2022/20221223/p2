@@ -1,0 +1,180 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadElfMap
+{
+	local LINE RE='^([.#]+)$'
+	local -i X Y=0 LEN YI
+	while read LINE ; do
+		if [[ "$LINE" =~ $RE ]]; then
+			(( LEN = ${#LINE} ))
+			(( YI = ( Y + OFF ) * YMULT ))
+			for (( X = 0 ; X < LEN ; X++ )); do
+				if [[ "${LINE:X:1}" == '#' ]]; then
+					(( ELVES[YI+X+OFF] = 1 ))
+				fi
+			done
+			(( Y++ ))
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+	(( ${#ELVES[*]} < 30 )) && debug "Counted %d elves at %s\n" ${#ELVES[*]} "${!ELVES[*]}"
+	(( ${#ELVES[*]} >= 30 )) && debug "Counted %d elves\n" ${#ELVES[*]}
+	DrawMap
+}
+
+function MoveElvesUntilStatic
+{
+	local -i COUNT=0
+	local -i ELF DIR D FIRSTDIR=0
+	local -i TARGET=() NEWPOS MOVES=1
+	local -i FN FS FW FE # Free N/S/W/E
+	# Dir : 0=N 1=S 2=W 3=E
+	while (( MOVES != 0 )); do
+		TARGET=()
+		debug "Move %d : looking = %d\n" $((C+1)) $FIRSTDIR
+		for ELF in ${!ELVES[@]} ; do
+			FN=1 FS=1 FW=1 FE=1
+			[[ -v ELVES[ELF-YMULT]   ]] && (( FN=0 ))
+			[[ -v ELVES[ELF-YMULT+1] ]] && (( FN=0, FE=0 ))
+			[[ -v ELVES[ELF+1]       ]] && (( FE=0 ))
+			[[ -v ELVES[ELF+YMULT+1] ]] && (( FS=0, FE=0 ))
+			[[ -v ELVES[ELF+YMULT]   ]] && (( FS=0 ))
+			[[ -v ELVES[ELF+YMULT-1] ]] && (( FS=0, FW=0 ))
+			[[ -v ELVES[ELF-1]       ]] && (( FW=0 ))
+			[[ -v ELVES[ELF-YMULT-1] ]] && (( FN=0, FW=0 ))
+			debug "Elf %d : N=%d S=%d W=%d E=%d\n" $ELF $FN $FS $FW $FE
+			if (( FN + FS + FW + FE == 4 )); then
+				debug "Elf %d is resting\n" $ELF
+				continue
+			fi
+			for (( D = 0 ; D < 4 ; D++ )); do
+				(( DIR = ( FIRSTDIR + D ) % 4 ))
+				if (( DIR == 0 )); then # North = -YMULT
+					if (( FN )); then
+						if [[ ! -v TARGET[ELF-YMULT] ]]; then
+							debug "Elf %d wants to move north to %d\n" $ELF $((ELF-YMULT))
+							(( TARGET[ELF-YMULT] = ELF ))
+						else
+							debug "Location %d is blocked\n" $((ELF-YMULT))
+							(( TARGET[ELF-YMULT] = -1 ))
+						fi
+						break
+					fi
+				elif (( DIR == 1 )); then # South = +YMULT
+					if (( FS )); then
+						if [[ ! -v TARGET[ELF+YMULT] ]]; then
+							debug "Elf %d wants to move south to %d\n" $ELF $((ELF+YMULT))
+							(( TARGET[ELF+YMULT] = ELF ))
+						else
+							debug "Location %d is blocked\n" $((ELF+YMULT))
+							(( TARGET[ELF+YMULT] = -1 ))
+						fi
+						break
+					fi
+				elif (( DIR == 2 )); then # West = -1
+					if (( FW )); then
+						if [[ ! -v TARGET[ELF-1] ]]; then
+							debug "Elf %d wants to move west to %d\n" $ELF $((ELF-1))
+							(( TARGET[ELF-1] = ELF ))
+						else
+							debug "Location %d is blocked\n" $((ELF-1))
+							(( TARGET[ELF-1] = -1 ))
+						fi
+						break
+					fi
+				elif (( DIR == 3 )); then # East = +1
+					if (( FE )); then
+						if [[ ! -v TARGET[ELF+1] ]]; then
+							debug "Elf %d wants to move east to %d\n" $ELF $((ELF+1))
+							(( TARGET[ELF+1] = ELF ))
+						else
+							debug "Location %d is blocked\n" $((ELF+1))
+							(( TARGET[ELF+1] = -1 ))
+						fi
+						break
+					fi
+				fi
+			done
+		done
+		MOVES=0
+		for NEWPOS in ${!TARGET[@]}; do
+			if (( TARGET[NEWPOS] == -1 )); then
+				debug "Noone moves to %d\n" $NEWPOS
+			else
+				debug "Elf %d moves to %d\n" ${TARGET[NEWPOS]} $NEWPOS
+				(( ELVES[NEWPOS] = 1 ))
+				unset ELVES[TARGET[NEWPOS]]
+				(( MOVES++ ))
+			fi
+		done
+		(( DEBUG )) && DrawMap
+		(( COUNT++ ))
+		(( COUNT % 100 == 0)) && ( printf "Round %d\n" $COUNT ; DrawMap )
+		(( MOVES == 0 )) && ( printf "Elves static after %d rounds\n" $COUNT ; DrawMap )
+		(( FIRSTDIR = ( FIRSTDIR + 1 ) % 4 ))
+	done
+}
+
+function CalcCoverage
+{
+	local -i X Y ELF
+	for ELF in ${!ELVES[@]}; do
+		(( Y = ELF / 1000000 - 1000 ))
+		(( X = ELF % 1000000 - 1000 ))
+		(( X < MINX )) && (( MINX = X ))
+		(( X > MAXX )) && (( MAXX = X ))
+		(( Y < MINY )) && (( MINY = Y ))
+		(( Y > MAXY )) && (( MAXY = Y ))
+	done
+}
+
+function DrawMap
+{
+	CalcCoverage
+	local -i X Y YI
+	local CELF=$'\e[38;2;40;255;40;48;2;60;50;20m🧝\e[0m' CDIRT=$'\e[38;2;110;90;30;48;2;60;50;20m🟤\e[0m'
+	for (( Y = MINY ; Y <= MAXY ; Y++ )); do
+		(( YI = ( Y + 1000 ) * 1000000 ))
+		for (( X = MINX ; X <= MAXX ; X++ )); do
+			if [[ -v ELVES[YI+X+1000] ]]; then
+				echo -n $CELF
+			else
+				echo -n $CDIRT
+			fi
+		done
+		echo
+	done
+}
+
+function CalcElfCoverage
+{
+	local INPUT="$1"
+	local -i ELVES=() YMULT=1000000 OFF=1000 # Index is (Y*MULT+X) with X and Y starting at 1000
+	local -i MINX=1000 MINY=1000 MAXX=-1000 MAXY=-1000
+	ReadElfMap < $INPUT
+	MoveElvesUntilStatic
+}
+
+CalcElfCoverage $INPUT ; exit $?

@@ -1,0 +1,91 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function DeSNAFU
+{
+	local S="$1" C
+	local -i I L=${#S} V=0
+	for (( I = 0 ; I < L ; I++ )); do
+		(( V *= 5 ))
+		C="${S:I:1}"
+		if [[ "$C" = '=' ]]; then
+			(( V -= 2 ))
+		elif [[ "$C" = '-' ]]; then
+			(( V-- ))
+		else
+			(( V += C ))
+		fi
+	done
+	debug "Decode '%s' = %d\n" "$S" $V
+	echo $V
+}
+
+function SNAFU
+{
+	local -i V=$1 E=0 I OV=$1
+	local S=''
+	while (( V > (5 ** E) / 2 )); do (( E++ )) ; done
+	for (( I = E - 1 ; I >= 0 ; I-- )); do
+		if (( V > (5 ** I) * 3 / 2 )); then
+			S+='2'
+			(( V -= 2 * (5 ** I ) ))
+		elif (( V > (5 ** I) / 2 )); then
+			S+='1'
+			(( V -= (5 ** I ) ))
+		elif (( V >= 0 - (5 ** I) / 2 )); then
+			S+='0'
+		elif (( V >= 0 - (5 ** I) * 3 / 2 )); then
+			S+='-'
+			(( V += (5 ** I ) ))
+		else
+			S+='='
+			(( V += 2 * (5 ** I ) ))
+		fi
+	done
+	debug "Encode %d = '%s' (rem %d)\n" $OV "$S" $V
+	echo "$S"
+}
+
+function ReadFuelList
+{
+	local LINE RE='^[-=012]+$'
+	while read LINE ; do
+		if [[ "$LINE" =~ $RE ]]; then
+			FUEL["$LINE"]=$( DeSNAFU "$LINE" )
+			(( TOTALFUEL += FUEL["$LINE"] ))
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+}
+
+function AddFuelAmounts
+{
+	local INPUT="$1"
+	local -i -A FUEL=()
+	local -i TOTALFUEL=0
+	ReadFuelList < $INPUT
+	printf "Total Fuel: %d = %s\n" $TOTALFUEL "$( SNAFU $TOTALFUEL )"
+}
+
+AddFuelAmounts $INPUT ; exit $?
