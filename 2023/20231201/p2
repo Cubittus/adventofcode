@@ -1,0 +1,73 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadNumbers
+{
+	local LINE
+	local -A NT=( 'one' 1 'two' 2 'three' 3 'four' 4 'five' 5 'six' 6 'seven' 7 'eight' 8 'nine' 9 )
+	local NRE='(one|two|three|four|five|six|seven|eight|nine)'
+	local PNRE='^'"$NRE"
+	local SNRE="$NRE"'.*$'
+	local RE1='^[a-z]*([0-9])[a-z]*$'
+	local RE2='^[a-z]*([0-9])[a-z0-9]*([0-9])[a-z]*$'
+	local -i N1 N2 LEN I NUML
+	local NUM
+	while read LINE ; do
+		(( LEN = ${#LINE} ))
+		(( N1 = 0 ))
+		(( N2 = 0 ))
+		for (( I = 0 ; I < LEN ; I++ )); do
+			if [[ ${LINE:I:1} =~ ([1-9]) ]]; then
+				(( N1 = BASH_REMATCH[1] ))
+				break
+			fi
+			if [[ ${LINE:I} =~ $PNRE ]]; then
+				(( N1 = NT[${BASH_REMATCH[1]}] ))
+				break
+			fi
+		done
+		for (( I = LEN - 1 ; I >= 0 ; I-- )); do
+			if [[ ${LINE:I:1} =~ ([1-9]) ]]; then
+				(( N2 = BASH_REMATCH[1] ))
+				break
+			fi
+			if [[ ${LINE:I} =~ $SNRE ]]; then
+				(( N2 = NT[${BASH_REMATCH[1]}] ))
+				break
+			fi
+		done
+		(( N1 > 0 && N2 > 0 )) || error "Did not find numbers : %s %d %d\n" "$LINE" "$N1" "$N2"
+		debug "Read [%s] -> %d %d\n" "$LINE" "$N1" "$N2"
+		(( SUM += $N1$N2 ))
+	done
+}
+
+function CalcCalibration
+{
+	local INPUT="$1"
+	local -i SUM=0
+	ReadNumbers < $INPUT
+	printf "Result: %s" $SUM
+}
+
+CalcCalibration $INPUT ; exit $?

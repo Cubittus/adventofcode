@@ -1,0 +1,53 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadNumbers
+{
+	local LINE
+	local RE1='^[a-z]*([0-9])[a-z]*$'
+	local RE2='^[a-z]*([0-9])[a-z0-9]*([0-9])[a-z]*$'
+	local -i N1 N2
+	while read LINE ; do
+		if [[ "$LINE" =~ $RE1 ]]; then
+			(( N1 = BASH_REMATCH[1] ))
+			(( N2 = N1 ))
+		elif [[ "$LINE" =~ $RE2 ]]; then
+			(( N1 = BASH_REMATCH[1] ))
+			(( N2 = BASH_REMATCH[2] ))
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+		debug "Read [%s] -> %d %d\n" "$LINE" "$N1" "$N2"
+		(( SUM += $N1$N2 ))
+	done
+}
+
+function CalcCalibration
+{
+	local INPUT="$1"
+	local -i SUM=0
+	ReadNumbers < $INPUT
+	printf "Result: %s" $SUM
+}
+
+CalcCalibration $INPUT ; exit $?
