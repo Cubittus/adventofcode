@@ -39,7 +39,7 @@ function DoThing
 	local INPUT="$1"
 	local -i NUMTHINGS=0
 	ReadStuff < $INPUT
-	printf "Result: %s" $NUMTHINGS
+	printf "Result: %s\n" $NUMTHINGS
 }
 
 DoThing $INPUT ; exit $?

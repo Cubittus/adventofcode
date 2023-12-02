@@ -47,7 +47,7 @@ function CalcCalibration
 	local INPUT="$1"
 	local -i SUM=0
 	ReadNumbers < $INPUT
-	printf "Result: %s" $SUM
+	printf "Result: %s\n" $SUM
 }
 
 CalcCalibration $INPUT ; exit $?
