@@ -1,0 +1,57 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadGames
+{
+	local LINE RE='^Game ([1-9][0-9]*): (.*)$'
+	local CRE='^([1-9][0-9]*) (red|green|blue)'
+	local COUNTTEXT
+	local -A MINCOL
+	while read LINE ; do
+		debug "Read [%s]\n" "$LINE"
+		if [[ "$LINE" =~ $RE ]]; then
+			MINCOL=( 'red' 0 'green' 0 'blue' 0 )
+			COUNTTEXT="${BASH_REMATCH[2]}"
+			while [[ "$COUNTTEXT" =~ $CRE ]]; do
+				debug "%d %s\n" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+				if (( MINCOL[${BASH_REMATCH[2]}] < BASH_REMATCH[1] )); then
+					(( MINCOL[${BASH_REMATCH[2]}] = BASH_REMATCH[1] ));
+				fi
+				COUNTTEXT="${COUNTTEXT:${#BASH_REMATCH[0]}+2}"
+			done
+			(( GAMESUM += MINCOL[red] * MINCOL[green] * MINCOL[blue] ))
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+}
+
+function SumGamePower
+{
+	local INPUT="$1"
+	local -i GAMESUM=0
+	ReadGames < $INPUT
+	printf "Result: %s\n" $GAMESUM
+}
+
+SumGamePower $INPUT ; exit $?

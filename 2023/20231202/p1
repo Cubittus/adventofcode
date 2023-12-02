@@ -1,0 +1,58 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadGames
+{
+	local LINE RE='^Game ([1-9][0-9]*): (.*)$'
+	local CRE='^([1-9][0-9]*) (red|green|blue)'
+	local -A MAXCOL=( 'red' 12 'green' 13 'blue' 14 )
+	local GAMEID COUNTTEXT VALID
+	while read LINE ; do
+		debug "Read [%s]\n" "$LINE"
+		if [[ "$LINE" =~ $RE ]]; then
+			(( GAMEID = BASH_REMATCH[1] ))
+			COUNTTEXT="${BASH_REMATCH[2]}"
+			VALID=1
+			while [[ "$COUNTTEXT" =~ $CRE ]]; do
+				debug "%d %s\n" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+				if (( BASH_REMATCH[1] > MAXCOL[${BASH_REMATCH[2]}] )); then
+					VALID=0
+				fi
+				COUNTTEXT="${COUNTTEXT:${#BASH_REMATCH[0]}+2}"
+			done
+			(( VALID )) && (( GAMESUM += GAMEID ))
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+}
+
+function SumPossibleGames
+{
+	local INPUT="$1"
+	local -i GAMESUM=0
+	ReadGames < $INPUT
+	printf "Result: %s\n" $GAMESUM
+}
+
+SumPossibleGames $INPUT ; exit $?
