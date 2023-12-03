@@ -1,0 +1,128 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadSchematic
+{
+	local LINE RE='^[-0-9.*&=%@+$/#]+$'
+	while read LINE ; do
+		#debug "Read [%s]\n" "$LINE"
+		if [[ "$LINE" =~ $RE ]]; then
+			(( NUMLINES++ ))
+			SCHEMATIC+=( "$LINE" )
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+}
+
+function MakeGearMap
+{
+	local -i L LO W X GEARPOS
+	local GEARRE='\*'
+	for (( L = 0; L <= NUMLINES; L++ )); do
+		#debug "%3d [%s]\n" $L "${SCHEMATIC[L]}"
+		(( LO = L * STRIDE + STRIDE ))
+		(( W = ${#SCHEMATIC[L]} ))
+		for (( X = 0; X < W; X++ )); do
+			if [[ "${SCHEMATIC[L]:X:1}" =~ $GEARRE ]]; then
+				(( GEARPOS = LO + X ))
+				GEARLIST+=( $GEARPOS )
+				(( GEARADJ[GEARPOS] = GEARPOS ))
+				(( X > 0 )) && (( GEARADJ[GEARPOS-1] = GEARPOS ))
+				(( GEARADJ[GEARPOS+1] = GEARPOS ))
+				(( L > 0 )) && (( GEARADJ[GEARPOS-STRIDE] = GEARPOS ))
+				(( L > 0 && X > 0 )) && (( GEARADJ[GEARPOS-STRIDE-1] = GEARPOS ))
+				(( L > 0 )) && (( GEARADJ[GEARPOS-STRIDE+1] = GEARPOS ))
+				(( GEARADJ[GEARPOS+STRIDE] = GEARPOS ))
+				(( X > 0 )) && (( GEARADJ[GEARPOS+STRIDE-1] = GEARPOS ))
+				(( GEARADJ[GEARPOS+STRIDE+1] = GEARPOS ))
+			fi
+		done
+	done
+	debug "%s\n" "${GEARLIST[*]@K}"
+	debug "%s\n" "${GEARADJ[*]@K}"
+}
+
+# Assuming no number touches >1 gear!
+function SumGearRatios
+{
+	local -i L LO W X NW ISPN
+	local NUMRE='^([0-9]+).*$'
+	local GEARFIRSTPART=()
+	local GEARRATIO PARTSHIFT=1000
+	for (( L = 0; L < NUMLINES; L++ )); do
+		debug "%3d [%s]\n" $L "${SCHEMATIC[L]}"
+		(( LO = L * STRIDE + STRIDE ))
+		(( W = ${#SCHEMATIC[L]} ))
+		for (( X = 0; X < W; X++ )); do
+			if [[ "${SCHEMATIC[L]:X}" =~ $NUMRE ]]; then
+				(( NW = ${#BASH_REMATCH[1]} ))
+				(( GEARPOS = 0 ))
+				while (( NW > 0 && GEARPOS == 0 )); do
+					(( GEARPOS += GEARADJ[LO+X] ))
+					(( X++ ))
+					(( NW-- ))
+				done
+				(( X += NW ))
+				if (( GEARPOS )); then
+					debug "Part %4d touches gear %6d : " "${BASH_REMATCH[1]}" "$GEARPOS"
+					(( GEARADJ[GEARPOS]++ ))
+					if (( GEARFIRSTPART[GEARPOS] >= PARTSHIFT )); then
+						debug "Other part is %4d\n" "$(( GEARFIRSTPART[GEARPOS] - PARTSHIFT ))"
+						(( GEARRATIO = BASH_REMATCH[1] * ( GEARFIRSTPART[GEARPOS] - PARTSHIFT ) ))
+						(( SUMGEARRATIOS += GEARRATIO ))
+						(( GEARFIRSTPART[GEARPOS] = - GEARRATIO ))
+					elif (( GEARFIRSTPART[GEARPOS] < 0 )); then
+						debug "Found gear with 3 parts at %6d (Removing)\n" "$GEARPOS"
+						(( SUMGEARRATIOS += GEARFIRSTPART[GEARPOS] ))
+						(( GEARFIRSTPART[GEARPOS] = 3 ))
+					elif (( GEARFIRSTPART[GEARPOS] > 0 )); then
+						(( GEARFIRSTPART[GEARPOS]++ ))
+						debug "Found gear with %d parts at %6d (Ignoring)\n" "${GEARFIRSTPART[GEARPOS]}" "$GEARPOS"
+					else
+						debug "First part\n"
+						(( GEARFIRSTPART[GEARPOS] = BASH_REMATCH[1] + PARTSHIFT ))
+					fi
+				#else
+					#debug "Not PN %d\n" "${BASH_REMATCH[1]}"
+				fi
+			fi
+		done
+	done
+	debug "%s\n" "${GEARADJ[*]@K}"
+}
+
+function SumParts
+{
+	local INPUT="$1"
+	local -i NUMLINES
+	local SCHEMATIC=()
+	local -i GEARADJ=() GEARLIST=() STRIDE=1000
+	local -i SUMGEARRATIOS=0
+	ReadSchematic < $INPUT
+	MakeGearMap
+	SumGearRatios
+	printf "Result: %s\n" $SUMGEARRATIOS
+}
+
+SumParts $INPUT ; exit $?

@@ -1,0 +1,105 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadSchematic
+{
+	local LINE RE='^[-0-9.*&=%@+$/#]+$'
+	while read LINE ; do
+		debug "Read [%s]\n" "$LINE"
+		if [[ "$LINE" =~ $RE ]]; then
+			(( NUMLINES++ ))
+			SCHEMATIC+=( "$LINE" )
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+}
+
+function MakeSymMap
+{
+	local -i L LO W X
+	local SYMRE='[-*&=%@+$/#]'
+	for (( L = 0; L < NUMLINES; L++ )); do
+		debug "%3d [%s]\n" $L "${SCHEMATIC[L]}"
+		(( LO = L * STRIDE ))
+		(( W = ${#SCHEMATIC[L]} ))
+		for (( X = 0; X < W; X++ )); do
+			if [[ "${SCHEMATIC[L]:X:1}" =~ $SYMRE ]]; then
+				(( SYMADJ[LO+X] = 1 ))
+				(( X > 0 )) && (( SYMADJ[LO+X-1] = 1 ))
+				(( SYMADJ[LO+X+1] = 1 ))
+				(( L > 0 )) && (( SYMADJ[LO-STRIDE+X] = 1 ))
+				(( L > 0 && X > 0 )) && (( SYMADJ[LO-STRIDE+X-1] = 1 ))
+				(( L > 0 )) && (( SYMADJ[LO-STRIDE+X+1] = 1 ))
+				(( SYMADJ[LO+STRIDE+X] = 1 ))
+				(( X > 0 )) && (( SYMADJ[LO+STRIDE+X-1] = 1 ))
+				(( SYMADJ[LO+STRIDE+X+1] = 1 ))
+			fi
+		done
+	done
+	debug "%s\n" "${SYMADJ[*]@K}"
+}
+
+function SumPartNumbers
+{
+	local -i L LO W X NW ISPN
+	local NUMRE='^([0-9]+).*$'
+	for (( L = 0; L < NUMLINES; L++ )); do
+		debug "%3d [%s]\n" $L "${SCHEMATIC[L]}"
+		(( LO = L * STRIDE ))
+		(( W = ${#SCHEMATIC[L]} ))
+		for (( X = 0; X < W; X++ )); do
+			if [[ "${SCHEMATIC[L]:X}" =~ $NUMRE ]]; then
+				(( NW = ${#BASH_REMATCH[1]} ))
+				(( ISPN = 0 ))
+				while (( NW > 0 )); do
+					(( ISPN += SYMADJ[LO+X] ))
+					(( X++ ))
+					(( NW-- ))
+				done
+				if (( ISPN )); then
+					debug "PN %d\n" "${BASH_REMATCH[1]}"
+					(( SUMPARTNUMS += BASH_REMATCH[1] ))
+				else
+					debug "Not PN %d\n" "${BASH_REMATCH[1]}"
+				fi
+			fi
+		done
+	done
+	debug "%s\n" "${SYMADJ[*]@K}"
+}
+
+function SumParts
+{
+	local INPUT="$1"
+	local -i NUMLINES
+	local SCHEMATIC=()
+	local -i SYMADJ=() STRIDE=1000
+	local -i SUMPARTNUMS=0
+	ReadSchematic < $INPUT
+	MakeSymMap
+	SumPartNumbers
+	printf "Result: %s\n" $SUMPARTNUMS
+}
+
+SumParts $INPUT ; exit $?
