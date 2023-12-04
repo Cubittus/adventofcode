@@ -1,0 +1,66 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadCards
+{
+	local LINE RE='^Card *([1-9][0-9]*): ([0-9 ]+) \| ([0-9 ]+)$'
+	local -i WINNUM=() CARD N WINS LASTCARD=0
+	while read LINE ; do
+		debug "Read [%s]\n" "$LINE"
+		if [[ "$LINE" =~ $RE ]]; then
+			(( CARD = BASH_REMATCH[1] ))
+			(( CARDCOUNTS[CARD]++ ))
+			WINNUM=()
+			for N in ${BASH_REMATCH[2]} ; do
+				(( WINNUM[N] = 1 ))
+			done
+			WINS=0
+			for N in ${BASH_REMATCH[3]} ; do
+				if (( WINNUM[N] )); then
+					(( WINS++ ))
+				fi
+			done
+			debug "Wins = %d\n" "$WINS"
+			for (( N = 1 ; N <= WINS ; N++ )); do
+				(( CARDCOUNTS[CARD+N] += CARDCOUNTS[CARD] ))
+			done
+			(( LASTCARD = CARD ))
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+	for (( N = 1 ; N <= LASTCARD; N++ )); do
+		(( TOTALCARDS += CARDCOUNTS[N] ))
+	done
+}
+
+function SumPoints
+{
+	local INPUT="$1"
+	local -i TOTALCARDS=0
+	local -i CARDCOUNTS=()
+	ReadCards < $INPUT
+	printf "Result: %s\n" $TOTALCARDS
+}
+
+SumPoints $INPUT ; exit $?
