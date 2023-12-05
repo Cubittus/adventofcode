@@ -1,0 +1,94 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadSeedMap
+{
+	local LINE SEEDRE='^seeds: ([0-9 ]+)$'
+	read LINE
+	if [[ "$LINE" =~ $SEEDRE ]]; then
+		SEEDS=( ${BASH_REMATCH[1]} )
+		debug "Seeds = ( %s )\n" "${SEEDS[*]}"
+	else
+		error "Could not parse '%s'\n" "$LINE"
+	fi
+	local MAPSTARTRE='^([a-z]+)-to-([a-z]+) map:$'
+	local MAPRE='^([0-9]+) ([0-9]+) ([0-9]+)$'
+	local MAPNAME="unmapped"
+	local -n MAP="MAP$MAPNAME"
+	while read LINE ; do
+		#debug "Read [%s]\n" "$LINE"
+		if [[ "$LINE" =~ $MAPSTARTRE ]]; then
+			if (( ${#MAP[*]} )); then
+				debug "Mapping %s: %s\n" "$MAPNAME" "${MAP[*]}"
+			fi
+			debug "Start mapping %s to %s\n" "${BASH_REMATCH[1]^}" "${BASH_REMATCH[2]^}"
+			MAPNAME="${BASH_REMATCH[2]^^}"
+			MAPS+=( $MAPNAME )
+			local -n MAP="MAP$MAPNAME"
+			MAP=()
+		elif [[ "$LINE" =~ $MAPRE ]]; then
+			debug "   Map %d-%d to %d-%d\n" $((BASH_REMATCH[2])) $((BASH_REMATCH[2]+BASH_REMATCH[3]-1)) $((BASH_REMATCH[1])) $((BASH_REMATCH[1]+BASH_REMATCH[3]-1))
+			MAP+=( $((BASH_REMATCH[2])) $((BASH_REMATCH[2]+BASH_REMATCH[3]-1)) $((BASH_REMATCH[1]-BASH_REMATCH[2])) )
+		elif [[ "$LINE" == '' ]]; then
+			:
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+	debug "Maps: %s\n" "${MAPS[*]}"
+}
+
+function MapSeeds
+{
+	local -i NUM=( ${SEEDS[@]} ) COUNT=${#SEEDS[@]} I J MAPSIZE
+	for MAPNAME in ${MAPS[@]} ; do
+		local -n MAP="MAP$MAPNAME"
+		(( MAPSIZE = ${#MAP[@]} ))
+		for (( I = 0 ; I < COUNT ; I++ )); do
+			for (( J = 0 ; J < MAPSIZE ; J += 3 )); do
+				if (( NUM[I] >= MAP[J] && NUM[I] <= MAP[J+1] )); then
+					(( NUM[I] = NUM[I] + MAP[J+2] ))
+					break
+				fi
+			done
+		done
+	done
+	debug "Locations: %s\n" "${NUM[*]}"
+	LOWESTLOCATION=NUM[0]
+	for (( I = 1 ; I < COUNT ; I++ )); do
+		(( LOWESTLOCATION > NUM[I] )) && (( LOWESTLOCATION = NUM[I] ))
+	done
+}
+
+function FindLowestLocation
+{
+	local INPUT="$1"
+	local -i SEEDS=()
+	local MAPS=()
+	local -i LOWESTLOCATION=-1
+	ReadSeedMap < $INPUT
+	MapSeeds
+	printf "Result: %s\n" $LOWESTLOCATION
+}
+
+FindLowestLocation $INPUT ; exit $?
