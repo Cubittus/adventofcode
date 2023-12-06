@@ -1,0 +1,74 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadRecords
+{
+	local LINE
+	local TRE='^Time: *([0-9 ]+)$'
+	local DRE='^Distance: *([0-9 ]+)$'
+	read LINE
+	if [[ "$LINE" =~ $TRE ]]; then
+		TIME=( ${BASH_REMATCH[1]// /} )
+	else
+		error "Could not parse '%s'\n" "$LINE"
+	fi
+	read LINE
+	if [[ "$LINE" =~ $DRE ]]; then
+		DIST=( ${BASH_REMATCH[1]// /} )
+	else
+		error "Could not parse '%s'\n" "$LINE"
+	fi
+	debug "Times = %s\n" "${TIME[*]}"
+	debug "Distances = %s\n" "${DIST[*]}"
+	(( NUM = ${#TIME[*]} ))
+}
+
+function CalcWins
+{
+	local -i I J T D W
+	for (( I = 0 ; I < NUM ; I++ )); do
+		(( T = TIME[I] ))
+		(( D = DIST[I] ))
+		(( W = 0 ))
+		for (( J = 1 ; J < T - 1 ; J++ )); do
+			(( J * ( T - J ) > D )) && (( W++ ))
+		done
+		(( WINS[I] = W ))
+	done
+}
+
+function CalcWinsMult
+{
+	local INPUT="$1"
+	local -i TIME=() DIST=() NUM=0 I
+	local -i WINS=() WINSMULT=0
+	ReadRecords < $INPUT
+	CalcWins
+	(( WINSMULT = WINS[0] ))
+	for (( I = 1 ; I < NUM ; I++ )); do
+		(( WINSMULT *= WINS[I] ))
+	done
+	printf "Result: %s\n" $WINSMULT
+}
+
+CalcWinsMult $INPUT ; exit $?
