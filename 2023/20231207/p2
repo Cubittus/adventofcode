@@ -1,0 +1,206 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadHands
+{
+	local LINE TC RE='^([2-9TJQKA]{5}) ([0-9]+)$'
+	while read LINE ; do
+		debug "Hand %3d [%s]\n" "$NUMHANDS" "$LINE"
+		if [[ "$LINE" =~ $RE ]]; then
+			TC="${BASH_REMATCH[1]}"
+			OHAND[NUMHANDS]="$TC"
+			TC="${TC//T/a}"
+			TC="${TC//J/1}"
+			TC="${TC//Q/c}"
+			TC="${TC//K/d}"
+			TC="${TC//A/e}"
+			HAND[NUMHANDS]="$TC"
+			(( BID[NUMHANDS] = BASH_REMATCH[2] ))
+			(( RANK[NUMHANDS] = NUMHANDS ))
+			(( NUMHANDS++ ))
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+	debug "Read %d hands\n" $NUMHANDS
+}
+
+function SortHandsByValue
+{
+	local -i STACK=( 0 $((NUMHANDS-1)) )
+	local -i BEG END I PIV SM LG
+	local PIVC
+	while (( ${#STACK[@]} )); do
+		(( BEG = STACK[0] ))
+		(( END = STACK[1] ))
+		STACK=( "${STACK[@]:2}" )
+		SM=()
+		LG=()
+		(( PIV = VALUERANK[BEG] ))
+		PIVC="${HAND[PIV]}"
+		for (( I = BEG + 1 ; I <= END ; I++ )); do
+			if [[ "${HAND[VALUERANK[I]]}" > "$PIVC" ]]; then
+				SM+=( ${VALUERANK[I]} )
+			else
+				LG+=( ${VALUERANK[I]} )
+			fi
+		done
+		VALUERANK=( "${VALUERANK[@]:0:BEG}" "${SM[@]}" $PIV "${LG[@]}" "${VALUERANK[@]:END+1}" )
+		if (( ${#SM[@]} > 1 )); then
+			STACK+=( $BEG $(( BEG + ${#SM[@]} - 1 )) )
+		fi
+		if (( ${#LG[@]} > 1 )); then
+			STACK+=( $(( END - ${#LG[@]} + 1 )) $END )
+		fi
+	done
+	#debug "Ranked by value: %s\n" "${VALUERANK[*]}"
+}
+
+function Is5s
+{
+	local RE='(.)\1\1\1\1|1(.)\2\2\2|11(.)\3\3|111(.)\4|1111'
+	[[ "$1" =~ $RE ]]
+}
+
+function Is4s
+{
+	local RE='(.)\1\1\1|1.?(.)\2\2|11.?(.)\3|111'
+	[[ "$1" =~ $RE ]]
+}
+
+function IsFH
+{
+	local RE='(.)\1\1(.)\2|(.)\3(.)\4\4|1(.)\5(.)\6$'
+	[[ "$1" =~ $RE ]]
+}
+
+function Is3s
+{
+	local RE='(.)\1\1|1.*(.)\2|11'
+	[[ "$1" =~ $RE ]]
+}
+
+function Is2P
+{
+	local RE='(.)\1.?(.)\2'
+	[[ "$1" =~ $RE ]]
+}
+
+function Is2s
+{
+	local RE='(.)\1|1'
+	[[ "$1" =~ $RE ]]
+}
+
+function Is1s
+{
+	true
+}
+
+debug "Test Is5s %s\n" $( Is5s aaaaa && echo OK )
+debug "Test Is5s %s\n" $( Is5s aaaa3 || echo OK )
+debug "Test Is4s %s\n" $( Is4s aaaa4 && echo OK )
+debug "Test Is4s %s\n" $( Is4s 2aaa3 || echo OK )
+debug "Test IsFH %s\n" $( IsFH 22aaa && echo OK )
+debug "Test IsFH %s\n" $( IsFH 222aa && echo OK )
+debug "Test IsFH %s\n" $( IsFH 322aa || echo OK )
+debug "Test Is3s %s\n" $( Is3s 2aaa4 && echo OK )
+debug "Test Is3s %s\n" $( Is3s 2aa33 || echo OK )
+debug "Test Is2P %s\n" $( Is2P 2aa44 && echo OK )
+debug "Test Is2P %s\n" $( Is2P aa544 && echo OK )
+debug "Test Is2P %s\n" $( Is2P aa446 && echo OK )
+debug "Test Is2P %s\n" $( Is2P 2ab33 || echo OK )
+debug "Test Is2s %s\n" $( Is2P aa456 && echo OK )
+debug "Test Is2s %s\n" $( Is2P 2ab34 || echo OK )
+
+function SortCards
+{
+	local A="${1:0:1}" B="${1:1:1}" C="${1:2:1}" D="${1:3:1}" E="${1:4:1}" T
+	[[ $A > $B ]] && { T=$A ; A=$B ; B=$T ; }
+	[[ $B > $C ]] && { T=$B ; B=$C ; C=$T ; }
+	[[ $C > $D ]] && { T=$C ; C=$D ; D=$T ; }
+	[[ $D > $E ]] && { T=$D ; D=$E ; E=$T ; }
+	[[ $A > $B ]] && { T=$A ; A=$B ; B=$T ; }
+	[[ $B > $C ]] && { T=$B ; B=$C ; C=$T ; }
+	[[ $C > $D ]] && { T=$C ; C=$D ; D=$T ; }
+	[[ $A > $B ]] && { T=$A ; A=$B ; B=$T ; }
+	[[ $B > $C ]] && { T=$B ; B=$C ; C=$T ; }
+	[[ $A > $B ]] && { T=$A ; A=$B ; B=$T ; }
+	echo $A$B$C$D$E
+}
+
+function SortHandsByType
+{
+	local FILTER FILTERS=( Is5s Is4s IsFH Is3s Is2P Is2s Is1s )
+	local SHAND=()
+	local -i I CI
+	local C
+	for (( I = 0 ; I < NUMHANDS ; I++ )); do
+		SHAND[I]="$( SortCards "${HAND[I]}" )"
+		#debug "Sorted %s is %s\n" ${HAND[I]} ${SHAND[I]}
+	done
+	for FILTER in ${FILTERS[@]} ; do
+		for (( I = 0 ; I < NUMHANDS ; I++ )); do
+			(( CI = VALUERANK[I] ))
+			(( CI < 0 )) && continue
+			if $FILTER "${SHAND[CI]}" ; then
+				RANK+=( CI )
+				(( VALUERANK[I] = -1 ))
+				debug "Rank %4d %s %s\n" $(( NUMHANDS - ${#RANK[*]} + 1 )) $FILTER ${OHAND[CI]}
+			fi
+		done
+	done
+	debug "Ranked by type and value: %s\n" "${RANK[*]}"
+}
+
+function SortHands
+{
+	local -i VALUERANK=( "${RANK[@]}" )
+	SortHandsByValue
+	RANK=()
+	SortHandsByType
+}
+
+function CalcWinnings
+{
+	local I CI
+	TOTALWINNINGS=0
+	for (( I = 0 ; I < NUMHANDS ; I++ )); do
+		(( CI = RANK[I] ))
+		(( TOTALWINNINGS += (NUMHANDS - I) * BID[CI] ))
+	done
+}
+
+function SumWinnings
+{
+	local INPUT="$1"
+	local -i NUMHANDS=0 TOTALWINNINGS=0
+	local HAND=() OHAND=()
+	local -i BID=() RANK=()
+	ReadHands < $INPUT
+	SortHands
+	CalcWinnings
+	printf "Result: %s\n" $TOTALWINNINGS
+}
+
+SumWinnings $INPUT ; exit $?
