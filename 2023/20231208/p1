@@ -1,0 +1,79 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadMap
+{
+	local LINE MAPRE='^([A-Z]{3}) = \(([A-Z]{3}), ([A-Z]{3})\)$'
+	local DIRLIST
+	local -i D DL
+	read DIRLIST
+	(( DL = ${#DIRLIST} ))
+	for (( D = 0; D < DL ; D++ )); do
+		if [[ ${DIRLIST:D:1} == 'R' ]]; then
+			DIRECTIONS+=( 0 )
+		else
+			DIRECTIONS+=( 1 )
+		fi
+	done
+	read
+	while read LINE ; do
+		if [[ "$LINE" =~ $MAPRE ]]; then
+			MAPLEFT[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}
+			MAPRIGHT[${BASH_REMATCH[1]}]=${BASH_REMATCH[3]}
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+	debug "Directions = %s\n" "${DIRECTIONS[*]}"
+	debug "Left turns = %s\n" "${MAPLEFT[*]@K}"
+	debug "Right turns = %s\n" "${MAPRIGHT[*]@K}"
+}
+
+function FollowMap
+{
+	local LOC='AAA'
+	local -i D=0 DL=${#DIRECTIONS[@]}
+	while [[ $LOC != 'ZZZ' ]]; do
+		if (( DIRECTIONS[D] )); then
+			LOC=${MAPLEFT[$LOC]}
+		else
+			LOC=${MAPRIGHT[$LOC]}
+		fi
+		(( NUMSTEPS++ ))
+		(( D++ ))
+		(( D >= DL )) && (( D = 0 ))
+	done
+}
+
+function CountSteps
+{
+	local INPUT="$1"
+	local -i DIRECTIONS=()
+	local -A MAPLEFT=() MAPRIGHT=()
+	local -i NUMSTEPS=0
+	ReadMap < $INPUT
+	FollowMap
+	printf "Result: %s\n" $NUMSTEPS
+}
+
+CountSteps $INPUT ; exit $?

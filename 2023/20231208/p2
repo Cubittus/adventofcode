@@ -1,0 +1,113 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadMap
+{
+	local LINE MAPRE='^([A-Z12]{3}) = \(([A-Z12]{3}), ([A-Z12]{3})\)$'
+	local DIRLIST
+	local -i D DL
+	read DIRLIST
+	(( DL = ${#DIRLIST} ))
+	for (( D = 0; D < DL ; D++ )); do
+		if [[ ${DIRLIST:D:1} == 'R' ]]; then
+			DIRECTIONS+=( 0 )
+		else
+			DIRECTIONS+=( 1 )
+		fi
+	done
+	read
+	while read LINE ; do
+		if [[ "$LINE" =~ $MAPRE ]]; then
+			MAPLEFT[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}
+			MAPRIGHT[${BASH_REMATCH[1]}]=${BASH_REMATCH[3]}
+			(( ISEND[${BASH_REMATCH[1]}] = 0 ))
+			if [[ ${BASH_REMATCH[1]:2:1} == 'A' ]]; then
+				LOC+=( ${BASH_REMATCH[1]} )
+				(( NUMLOCS++ ))
+			elif [[ ${BASH_REMATCH[1]:2:1} == 'Z' ]]; then
+				(( ISEND[${BASH_REMATCH[1]}] = 1 ))
+			fi
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+	debug "Directions = %s\n" "${DIRECTIONS[*]}"
+	debug "Left turns = %s\n" "${MAPLEFT[*]@K}"
+	debug "Right turns = %s\n" "${MAPRIGHT[*]@K}"
+	debug "Starts = %s\n" "${LOC[*]}"
+	debug "Endings = %s\n" "${ISEND[*]@K}"
+}
+
+function GCD
+{
+	local -i A=$1 B=$2
+	(( B == 0)) && { echo $A ; return ; }
+	echo $( GCD $B $(( A % B )) )
+}
+
+function LCM
+{
+	local -i A=$1 B=$2
+	echo $(( A * B / $( GCD $A $B ) ))
+}
+
+function FollowMap
+{
+	local -i D=0 DL=${#DIRECTIONS[@]} L
+	local -i LOCSTEPS=()
+	local P
+	for (( L = 0 ; L < NUMLOCS ; L++ )); do
+		P=${LOC[L]}
+		(( LOCSTEPS[L] = 0 ))
+		(( D = 0 ))
+		while (( ! ISEND[$P] )); do
+			if (( DIRECTIONS[D] )); then
+				P=${MAPLEFT[$P]}
+			else
+				P=${MAPRIGHT[$P]}
+			fi
+			(( LOCSTEPS[L]++ ))
+			(( D++ ))
+			(( D >= DL )) && (( D = 0 ))
+		done
+	done
+	debug "Loc Steps = %s\n" "${LOCSTEPS[*]}"
+	(( NUMSTEPS = LOCSTEPS[0] ))
+	for (( L = 1 ; L < NUMLOCS ; L++ )); do
+		(( NUMSTEPS = $( LCM $NUMSTEPS ${LOCSTEPS[L]} ) ))
+	done
+}
+
+function CountSteps
+{
+	local INPUT="$1"
+	local -i DIRECTIONS=()
+	local -A MAPLEFT=() MAPRIGHT=() ISEND=()
+	local LOC=()
+	local -i NUMSTEPS=0 NUMLOCS=0
+	ReadMap < $INPUT
+	FollowMap
+	printf "Result: %s\n" $NUMSTEPS
+}
+
+CountSteps $INPUT ; exit $?
