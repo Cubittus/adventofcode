@@ -1,0 +1,98 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadSequences
+{
+	local LINE RE='^([-0-9 ]+)$'
+	while read LINE ; do
+		if [[ "$LINE" =~ $RE ]]; then
+			SEQ[NUMSEQS]="${BASH_REMATCH[1]}"
+			printf -v LAST[NUMSEQS] "%s" "${BASH_REMATCH[1]##* }"
+			(( NUMSEQS++ ))
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+	debug "Sequences = %d\n" $NUMSEQS
+	debug "Last numbers = %s\n" "${LAST[*]}"
+}
+
+function Delta
+{
+	local -i P
+	(( P = $1 ))
+	shift
+	while (( $# )); do
+		printf "%d" $(( $1 - P ))
+		(( P = $1 ))
+		shift
+		(( $# )) && echo -n ' '
+	done
+}
+
+function PrintSum
+{
+	local -i S=0
+	debug "Sum %s" "$*"
+	while (( $# )); do
+		(( S += $1 ))
+		shift
+	done
+	debug " = %d\n" $S
+	printf "%d" $S
+}
+
+function Extrapolate
+{
+	local -i I SD DL=()
+	local S=()
+	local ZRE='^(0 )*0$'
+	for (( I = 0 ; I < NUMSEQS ; I++ )); do
+		debug "Sequence %d\n" $I
+		(( SD = 0 ))
+		S=()
+		DL=()
+		S[SD]="${SEQ[I]}"
+		(( DL[SD] = LAST[I] ))
+		while [[ ! "${S[SD]}" =~ $ZRE ]]; do
+			debug "D %3d : %6d = %s\n" $SD "${DL[SD]}" "${S[SD]}"
+			(( SD++ ))
+			S[SD]="$( Delta ${S[SD-1]} )"
+			printf -v DL[SD] "%s" "${S[SD]##* }"
+		done
+		(( SUM += $( PrintSum ${DL[@]} ) ))
+		(( DEBUG )) && sleep 1
+	done
+}
+
+function SumNextValues
+{
+	local INPUT="$1"
+	local -i SUM=0 NUMSEQS=0 LAST=()
+	local SEQ=()
+	ReadSequences < $INPUT
+	Extrapolate
+	printf "Result: %s\n" $SUM
+}
+
+SumNextValues $INPUT ; exit $?
