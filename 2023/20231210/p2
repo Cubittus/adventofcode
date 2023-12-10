@@ -1,0 +1,178 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function PrintMap
+{
+	local -i O=0 S=${#MAP}
+	while (( O < S )); do
+		printf "%s\n" "${MAP:O:WIDTH}"
+		(( O += WIDTH ))
+	done
+}
+
+function ReadMap
+{
+	local LINE RE='^[-|F7JL.]+$'
+	local SRE='^([-|F7JL.]*)S([-|F7JL.]*)$'
+	while read LINE ; do
+		if [[ "$LINE" =~ $RE ]]; then
+			MAP="$MAP$LINE"
+			(( WIDTH = ${#LINE} ))
+		elif [[ "$LINE" =~ $SRE ]]; then
+			(( START = ${#MAP} + ${#BASH_REMATCH[1]} ))
+			MAP="$MAP${BASH_REMATCH[1]}P${BASH_REMATCH[2]}"
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+	debug "Map is %d by %d\n" "$WIDTH" "$(( ${#MAP} / $WIDTH ))"
+	(( DEBUG )) && PrintMap
+	debug "Start at offset %d (%d x %d)\n" "$START" "$(( START % WIDTH ))" "$(( START / WIDTH ))"
+}
+
+function MarkPath
+{
+	local -i UP=1 DN=2 LT=3 RT=4
+	local -A DIR=(
+	"-$RT" $RT  "-$LT" $LT  "|$UP" $UP  "|$DN" $DN
+	"7$RT" $DN  "J$DN" $LT  "L$LT" $UP  "F$UP" $RT
+	"F$LT" $DN  "L$DN" $RT  "J$RT" $UP  "7$UP" $LT )
+	local -i -A MOVE=( $RT 1 $LT -1 $UP -$WIDTH $DN $WIDTH )
+	local -i P=-1 D=-1
+	local SYM
+	if (( START >= WIDTH )); then
+		SYM="${MAP:START-WIDTH:1}"
+		if [[ "$SYM" =~ [|F7] ]]; then
+			(( P = START - WIDTH ))
+			(( D = UP ))
+			debug "P @ %d x %d f %d\n" $((P%WIDTH)) $((P/WIDTH)) $D
+		fi
+	fi
+	if (( P == -1 && START % WIDTH < WIDTH - 1 )); then
+		SYM="${MAP:START+1:1}"
+		if [[ "$SYM" =~ [-J7] ]]; then
+			(( P = START + 1 ))
+			(( D = RT ))
+			debug "P @ %d x %d f %d\n" $((P%WIDTH)) $((P/WIDTH)) $D
+		fi
+	fi
+	if (( P == -1 && START < ${#MAP} - WIDTH )); then
+		SYM="${MAP:START+WIDTH:1}"
+		if [[ "$SYM" =~ [|LJ] ]]; then
+			(( P = START + WIDTH ))
+			(( D = DN ))
+			debug "P @ %d x %d f %d\n" $((P%WIDTH)) $((P/WIDTH)) $D
+		fi
+	fi
+	(( NUMSTEPS = 1 ))
+	debug "Step %d @ %d x %d\n" $NUMSTEPS $((P%WIDTH)) $((P/WIDTH))
+	while (( P != START )); do
+		SYM="${MAP:P:1}"
+		MAP="${MAP:0:P}P${MAP:P+1}"
+		if (( D == UP )); then
+			debug "Entering up\n"
+			MAP="${MAP:0:P}U${MAP:P+1}"
+		fi
+		(( D = DIR[$SYM$D] ))
+		debug "Turning %d\n" $D
+		if (( D == DN )); then
+			debug "Leaving down\n"
+			MAP="${MAP:0:P}D${MAP:P+1}"
+		fi
+		(( P = P + MOVE[$D] ))
+		debug "P @ %d x %d f %d\n" $((P%WIDTH)) $((P/WIDTH)) $D
+		(( NUMSTEPS++ ))
+	done
+	(( D == UP )) && MAP="${MAP:0:P}U${MAP:P+1}"
+	(( D == DN )) && MAP="${MAP:0:P}D${MAP:P+1}"
+	(( DEBUG )) && PrintMap
+}
+
+function DoCount
+{
+	local -i S=${#MAP} X Y IN FIRSTUP=-1
+	local SYM
+	for (( Y = 0 ; Y < S ; Y += WIDTH )); do
+		for (( X = 0 ; X < WIDTH ; X++ )); do
+			SYM="${MAP:Y+X:1}"
+			if [[ "$SYM" == 'U' ]]; then
+				(( FIRSTUP = 1 ))
+				debug "Rows start with up pipe\n"
+				break
+			elif [[ "$SYM" == 'D' ]]; then
+				(( FIRSTUP = 0 ))
+				debug "Rows start with down pipe\n"
+				break
+			fi
+		done
+		(( FIRSTUP != -1 )) && break
+	done
+	if (( FIRSTUP )); then
+		for (( Y = 0 ; Y < S ; Y += WIDTH )); do
+			(( IN = 0 ))
+			for (( X = 0 ; X < WIDTH ; X++ )); do
+				SYM="${MAP:Y+X:1}"
+				if [[ "$SYM" == 'U' ]] ; then
+					(( IN = 1 ))
+					debug "At %d x %d turned up now inside\n" $X $((Y/WIDTH))
+				elif [[ "$SYM" == 'D' ]]; then
+					(( IN = 0 ))
+					debug "At %d x %d turned down now outside\n" $X $((Y/WIDTH))
+				elif [[ "$SYM" != 'P' ]]; then
+					(( INSIDE += IN ))
+					debug "At %d x %d inside = %d total = %d\n" $X $((Y/WIDTH)) $IN $INSIDE
+				fi
+			done
+		done
+	else
+		for (( Y = 0 ; Y < S ; Y += WIDTH )); do
+			(( IN = 0 ))
+			for (( X = 0 ; X < WIDTH ; X++ )); do
+				SYM="${MAP:Y+X:1}"
+				if [[ "$SYM" == 'D' ]] ; then
+					(( IN = 1 ))
+					debug "At %d x %d turned down now inside\n" $X $((Y/WIDTH))
+				elif [[ "$SYM" == 'U' ]]; then
+					(( IN = 0 ))
+					debug "At %d x %d turned up now outside\n" $X $((Y/WIDTH))
+				elif [[ "$SYM" != 'P' ]]; then
+					(( INSIDE += IN ))
+					debug "At %d x %d inside = %d total = %d\n" $X $((Y/WIDTH)) $IN $INSIDE
+				fi
+			done
+		done
+	fi
+}
+
+function CountInside
+{
+	local INPUT="$1"
+	local -i INSIDE=0 WIDTH START
+	local MAP 
+	ReadMap < $INPUT
+	MarkPath
+	DoCount
+	printf "Result: %s\n" $INSIDE
+}
+
+CountInside $INPUT ; exit $?

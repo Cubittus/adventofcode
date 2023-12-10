@@ -1,0 +1,130 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadMap
+{
+	local LINE RE='^[-|F7JL.]+$'
+	local SRE='^([-|F7JL.]*)S([-|F7JL.]*)$'
+	while read LINE ; do
+		if [[ "$LINE" =~ $RE ]]; then
+			MAP="$MAP$LINE"
+			(( WIDTH = ${#LINE} ))
+		elif [[ "$LINE" =~ $SRE ]]; then
+			(( START = ${#MAP} + ${#BASH_REMATCH[1]} ))
+			MAP="$MAP${BASH_REMATCH[1]}S${BASH_REMATCH[2]}"
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+	debug "Map is %d by %d\n" "$WIDTH" "$(( ${#MAP} / $WIDTH ))"
+	debug "Start at offset %d (%d x %d)\n" "$START" "$(( START % WIDTH ))" "$(( START / WIDTH ))"
+}
+
+function CountSteps
+{
+	local -i UP=1 DN=2 LT=3 RT=4
+	local -A DIR=(
+	"-$RT" $RT  "-$LT" $LT  "|$UP" $UP  "|$DN" $DN
+	"7$RT" $DN  "J$DN" $LT  "L$LT" $UP  "F$UP" $RT
+	"F$LT" $DN  "L$DN" $RT  "J$RT" $UP  "7$UP" $LT )
+	local -i -A MOVE=( $RT 1 $LT -1 $UP -$WIDTH $DN $WIDTH )
+	local -i P1=-1 P2=-1 D1=-1 D2=-1
+	local SYM
+	if (( START >= WIDTH )); then
+		SYM="${MAP:START-WIDTH:1}"
+		debug "Up = %s\n" "$SYM"
+		if [[ "$SYM" =~ [|F7] ]]; then
+			(( P1 = START - WIDTH ))
+			(( D1 = UP ))
+			debug "Set P1 to %d x %d f %d\n" $((P1%WIDTH)) $((P1/WIDTH)) $D1
+		fi
+	fi
+	if (( START % WIDTH < WIDTH - 1 )); then
+		SYM="${MAP:START+1:1}"
+		debug "Right = %s\n" "$SYM"
+		if [[ "$SYM" =~ [-J7] ]]; then
+			if (( P1 < 0 )); then
+				(( P1 = START + 1 ))
+				(( D1 = RT ))
+				debug "Set P1 to %d x %d f %d\n" $((P1%WIDTH)) $((P1/WIDTH)) $D1
+			else
+				(( P2 = START + 1 ))
+				(( D2 = RT ))
+				debug "Set P2 to %d x %d f %d\n" $((P2%WIDTH)) $((P2/WIDTH)) $D2
+			fi
+		fi
+	fi
+	if (( START < ${#MAP} - WIDTH )); then
+		SYM="${MAP:START+WIDTH:1}"
+		debug "Down = %s\n" "$SYM"
+		if [[ "$SYM" =~ [|LJ] ]]; then
+			if (( P1 < 0 )); then
+				(( P1 = START + WIDTH ))
+				(( D1 = DN ))
+				debug "Set P1 to %d x %d f %d\n" $((P1%WIDTH)) $((P1/WIDTH)) $D1
+			else
+				(( P2 = START + WIDTH ))
+				(( D2 = DN ))
+				debug "Set P2 to %d x %d f %d\n" $((P2%WIDTH)) $((P2/WIDTH)) $D2
+			fi
+		fi
+	fi
+	if (( START % WIDTH > 0 )); then
+		SYM="${MAP:START-1:1}"
+		debug "Left = %s\n" "$SYM"
+		if [[ "$SYM" =~ [-FL] ]]; then
+			(( P2 = START - 1 ))
+			(( D2 = LT ))
+			debug "Set P2 to %d x %d f %d\n" $((P2%WIDTH)) $((P2/WIDTH)) $D2
+		fi
+	fi
+	(( NUMSTEPS = 1 ))
+	debug "Step %d @ %d x %d & %d x %d\n" $NUMSTEPS $((P1%WIDTH)) $((P1/WIDTH)) $((P2%WIDTH)) $((P2/WIDTH))
+	while (( P1 != P2 )); do
+		SYM="${MAP:P1:1}"
+		(( D1 = DIR[$SYM$D1] ))
+		(( P1 = P1 + MOVE[$D1] ))
+		debug "Set P1 to %d x %d f %d\n" $((P1%WIDTH)) $((P1/WIDTH)) $D1
+		if (( P1 == P2 )); then
+			break
+		fi
+		SYM="${MAP:P2:1}"
+		(( D2 = DIR[$SYM$D2] ))
+		(( P2 = P2 + MOVE[$D2] ))
+		debug "Set P2 to %d x %d f %d\n" $((P2%WIDTH)) $((P2/WIDTH)) $D2
+		(( NUMSTEPS++ ))
+		debug "Step %d @ %d x %d & %d x %d\n" $NUMSTEPS $((P1%WIDTH)) $((P1/WIDTH)) $((P2%WIDTH)) $((P2/WIDTH))
+	done
+}
+
+function FindFarthest
+{
+	local INPUT="$1"
+	local -i NUMSTEPS=0 WIDTH START
+	local MAP
+	ReadMap < $INPUT
+	CountSteps
+	printf "Result: %s\n" $NUMSTEPS
+}
+
+FindFarthest $INPUT ; exit $?
