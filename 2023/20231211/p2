@@ -1,0 +1,94 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadMap
+{
+	local LINE EMPTYRE='^\.+$' GALRE='^[.#]+$'
+	local -i LEN Y=1 X XHASGAL=() XADD=() G
+	while read LINE ; do
+		if [[ "$LINE" =~ $EMPTYRE ]]; then
+			# Expand empty rows
+			(( Y += EXPANSION ))
+		elif [[ "$LINE" =~ $GALRE ]]; then
+			(( LEN = ${#LINE} ))
+			for (( X = 1 ; X <= LEN ; X++ )); do
+				[[ "${LINE:X-1:1}" == '.' ]] && continue
+				(( NUMGAL++ ))
+				(( GALX[NUMGAL] = X ))
+				(( GALY[NUMGAL] = Y ))
+				(( GALMAXX < X )) && (( GALMAXX = X ))
+				(( GALMAXY < Y )) && (( GALMAXY = Y ))
+				(( XHASGAL[X] = 1 ))
+			done
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+		(( Y++ ))
+	done
+	(( XADD[1] = 0 ))
+	for (( X = 2 ; X <= GALMAXX ; X++ )); do
+		(( XADD[X] = XADD[X-1] + ( 1 - XHASGAL[X] ) * EXPANSION ))
+	done
+	debug "X Add = %s\n" "${XADD[*]}"
+	for (( X = GALMAXX ; X > 1 ; X-- )); do
+		(( XADD[X] )) || break
+		for (( G = 1 ; G <= NUMGAL ; G++ )); do
+			(( GALX[G] == X )) && (( GALX[G] += XADD[X] ))
+		done
+	done
+	(( GALMAXX += XADD[GALMAXX] ))
+	debug "Galaxy expands to %d x %d\n" $GALMAXX $GALMAXY
+}
+
+function SumPaths
+{
+	local -i GA GB
+	for (( GA = 1 ; GA <= NUMGAL ; GA++ )); do
+		debug "Galaxy %2d at %3d x %3d\n" $GA ${GALX[GA]} ${GALY[GA]}
+		for (( GB = GA + 1 ; GB <= NUMGAL ; GB++ )); do
+			if (( GALX[GA] < GALX[GB] )); then
+				(( SUMPATHS += GALX[GB] - GALX[GA] ))
+			else
+				(( SUMPATHS += GALX[GA] - GALX[GB] ))
+			fi
+			if (( GALY[GA] < GALY[GB] )); then
+				(( SUMPATHS += GALY[GB] - GALY[GA] ))
+			else
+				(( SUMPATHS += GALY[GA] - GALY[GB] ))
+			fi
+		done
+	done
+}
+
+function SumShortestPaths
+{
+	local INPUT="$1"
+	local -i GALX=() GALY=() NUMGAL=0 GALMAXX=-1 GALMAXY=-1
+	local -i SUMPATHS=0
+	local -i EXPANSION=999999
+	ReadMap < $INPUT
+	SumPaths
+	printf "Result: %s\n" $SUMPATHS
+}
+
+SumShortestPaths $INPUT ; exit $?
