@@ -1,0 +1,87 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadPatterns
+{
+	local LINE RE='^([#.]+)$'
+	local -i S I J
+	while read LINE ; do
+		if [[ "$LINE" =~ $RE ]]; then
+			(( NUMPAT++ ))
+			(( S = ${#LINE} ))
+			(( VERSIZE[NUMPAT] = S ))
+			local -n HOR="HOR$NUMPAT"
+			local -n VER="VER$NUMPAT"
+			HOR=()
+			VER=()
+			(( I = 0 ))
+			while [[ "$LINE" != '' ]]; do
+				(( I++ ))
+				HOR[I]="$LINE"
+				for (( J = 1 ; J <= S ; J++ )); do
+					VER[J]="${VER[J]}${LINE:J-1:1}"
+				done
+				read LINE
+			done
+			(( HORSIZE[NUMPAT] = I ))
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+}
+
+function FindReflections
+{
+	local DIR
+	local -i P S I J
+	for DIR in HOR VER; do
+		local -n SUM="${DIR}SUM"
+		for (( P = 1 ; P <= NUMPAT ; P++ )); do
+			local -n PAT="$DIR$P"
+			local -n S="${DIR}SIZE[$P]"
+			debug "%s%d = %s\n" $DIR $P "${PAT[*]@A}"
+			debug "S = %d\n" $S
+			for (( I = 1 ; I < S ; I++ )); do
+				[[ "${PAT[I]}" != "${PAT[I+1]}" ]] && continue
+				debug "Line %d matches %d\n" $I $((I+1))
+				for (( J = 1 ; J <= ( I - 1 ) && J < ( S - I ) ; J++ )); do
+					[[ "${PAT[I-J]}" != "${PAT[I+1+J]}" ]] && continue 2
+					debug "   Line %d matches %d\n" $((I-J)) $((I+1+J))
+				done
+				debug "Mirrored at %d-%d\n" $I $((I+1))
+				(( SUM += I ))
+			done
+		done
+	done
+}
+
+function SummarisePatterns
+{
+	local INPUT="$1"
+	local -i NUMPAT=0 HORSUM=0 VERSUM=0
+	ReadPatterns < $INPUT
+	FindReflections
+	printf "Result: %s\n" $(( HORSUM * 100 + VERSUM ))
+}
+
+SummarisePatterns $INPUT ; exit $?
