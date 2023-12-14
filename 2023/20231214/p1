@@ -1,0 +1,85 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadPlatform
+{
+	local LINE RE='^([.#O]+)$'
+	local -i X O=0
+	while read LINE ; do
+		if [[ "$LINE" =~ $RE ]]; then
+			(( WIDTH = ${#LINE} ))
+			for (( X = 0 ; X < WIDTH ; X++ )); do
+				[[ "${LINE:X:1}" == '.' ]] && (( PLATFORM[O+X] = 0 ))
+				[[ "${LINE:X:1}" == 'O' ]] && (( PLATFORM[O+X] = 1 ))
+				[[ "${LINE:X:1}" == '#' ]] && (( PLATFORM[O+X] = 2 ))
+			done
+			(( HEIGHT++ ))
+			(( O += WIDTH ))
+		else
+			error "Could not parse '%s'\n" "$LINE"
+		fi
+	done
+	debug "Read %d x %d platform\n" $WIDTH $HEIGHT
+}
+
+function RollNorth
+{
+	local -i MOVEMENT=1 X O
+	while (( MOVEMENT )); do
+		(( MOVEMENT = 0 ))
+		for (( O = 0 ; O < WIDTH * (HEIGHT - 1) - 1 ; O += WIDTH )); do
+			for (( X = 0 ; X < WIDTH ; X++ )); do
+				if (( PLATFORM[O+X] == 0 && PLATFORM[O+X+WIDTH] == 1 )); then
+					(( PLATFORM[O+X] = 1 ))
+					(( PLATFORM[O+X+WIDTH] = 0 ))
+					(( MOVEMENT++ ))
+				fi
+			done
+		done
+		debug "Rocks moved %d times\n" $MOVEMENT
+	done
+}
+
+function CalcNorthLoad
+{
+	local Y X O
+	for (( Y = 0 ; Y < HEIGHT ; Y++ )); do
+		(( O = Y * WIDTH ))
+		for (( X = 0 ; X < WIDTH ; X++ )); do
+			(( PLATFORM[O+X] == 1 )) && (( LOAD += HEIGHT - Y ))
+		done
+	done
+}
+
+function CalcLoad
+{
+	local INPUT="$1"
+	local -i LOAD=0 WIDTH=0 HEIGHT=0
+	local -i PLATFORM
+	ReadPlatform < $INPUT
+	RollNorth
+	CalcNorthLoad
+	printf "Result: %s\n" $LOAD
+}
+
+CalcLoad $INPUT ; exit $?
