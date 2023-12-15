@@ -1,0 +1,78 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadSequence
+{
+	local LINE RE='^([^,]+)(,.+|)$' STEPRE='^([a-z]+)(-|=([0-9]+))$'
+	read LINE
+	while [[ "$LINE" =~ $RE ]]; do
+		STEP="${BASH_REMATCH[1]}"
+		LINE="${BASH_REMATCH[2]:1}"
+		if [[ "$STEP" =~ $STEPRE ]]; then
+			SEQLABEL+=( "${BASH_REMATCH[1]}" )
+			if [[ "${BASH_REMATCH[2]}" == '-' ]]; then
+				SEQOP+=( 0 )
+			else
+				SEQOP+=( ${BASH_REMATCH[2]:1} )
+			fi
+		else
+			error "Invalid step %s\n" $STEP
+		fi
+		(( SEQLEN++ ))
+	done
+	debug "Read %d steps\n" $SEQLEN
+	debug "Labels = %s\nOps = %s\n" "${SEQLABEL[*]}" "${SEQOP[*]}"
+}
+
+function CalcHash
+{
+	local DATA="$1"
+	local -i LEN I CC
+	HASH=0
+	(( LEN = ${#DATA} ))
+	for (( I = 0 ; I < LEN ; I++ )); do
+		printf -v CC '%d' \'${DATA:I:1}
+		(( HASH = ( HASH + CC ) * 17 % 256 ))
+	done
+}
+
+function RunSequence
+{
+	local -i I HASH
+	for (( I = 0 ; I < SEQLEN ; I++ )); do
+		CalcHash ${SEQLABEL[I]}
+		# ...
+	done
+}
+
+function CalcResults
+{
+	local INPUT="$1" SEQLABEL=()
+	local -i SEQOP=()
+	local -i HASHSUM=0 SEQLEN=0
+	ReadSequence < $INPUT
+	RunSequence
+	printf "Result: %s\n" $HASHSUM
+}
+
+CalcResults $INPUT ; exit $?

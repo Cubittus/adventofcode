@@ -56,7 +56,6 @@ function RollNorth
 				fi
 			done
 		done
-		debug "Rocks moved north %d times\n" $MOVEMENT
 	done
 }
 
@@ -74,7 +73,6 @@ function RollWest
 				fi
 			done
 		done
-		debug "Rocks moved west %d times\n" $MOVEMENT
 	done
 }
 
@@ -92,7 +90,6 @@ function RollSouth
 				fi
 			done
 		done
-		debug "Rocks moved south %d times\n" $MOVEMENT
 	done
 }
 
@@ -110,7 +107,6 @@ function RollEast
 				fi
 			done
 		done
-		debug "Rocks moved east %d times\n" $MOVEMENT
 	done
 }
 
@@ -125,17 +121,58 @@ function CalcNorthLoad
 	done
 }
 
-function CalcLoad
+function CalcChecksum
 {
-	local INPUT="$1"
-	local -i LOAD=0 WIDTH=0 HEIGHT=0
-	local -i PLATFORM
-	ReadPlatform < $INPUT
+	local Y X O N
+	(( CHECKSUM=11 ))
+	(( N = 1 ))
+	for (( Y = 0 ; Y < HEIGHT ; Y++ )); do
+		(( O = Y * WIDTH ))
+		for (( X = 0 ; X < WIDTH ; X++ )); do
+			(( PLATFORM[O+X] == 1 )) && (( CHECKSUM += N * (O + X) ))
+			(( N += X + 3 ))
+		done
+	done
+}
+
+function RollCycle
+{
 	RollNorth
 	RollWest
 	RollSouth
 	RollEast
-	# ONE BILLION TIMES :-|
+}
+
+function CalcLoad
+{
+	local INPUT="$1"
+	local -i LOAD=0 CHECKSUM=0 WIDTH=0 HEIGHT=0
+	local -i PLATFORM
+	local -i NUMCYCLES=1000000000 REPEAT CHECKS=()
+	ReadPlatform < $INPUT
+	RollCycle
+	RollCycle
+	RollCycle
+	RollCycle
+	RollCycle
+	for (( I = 5 ; I < NUMCYCLES ; I++ )); do
+		CalcChecksum
+		if (( CHECKS[CHECKSUM] )); then
+			(( REPEAT = I - 1 ))
+			debug "Repeats every %d - jumping from %d" $REPEAT $I
+			(( I = I + ( (NUMCYCLES - I) / REPEAT) * REPEAT ))
+			debug " to %d\n" $I
+			break
+		fi
+		(( CHECKS[CHECKSUM]++ ))
+		debug "CHECKS=%s\n" "${CHECKS[*]@A}"
+		(( DEBUG )) && sleep 0.5
+		RollCycle
+	done
+	while (( I <= NUMCYCLES )); do
+		RollCycle
+		(( I++ ))
+	done
 	CalcNorthLoad
 	printf "Result: %s\n" $LOAD
 }

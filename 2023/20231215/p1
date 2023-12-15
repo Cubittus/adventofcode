@@ -1,0 +1,65 @@
+#!/bin/bash
+
+INPUT=input.txt
+(( TEST )) && INPUT=test.txt
+(( TEST > 1 )) && INPUT=test$TEST.txt
+(( TEST )) && DEBUG=1
+
+function debug
+{
+	(( DEBUG )) || return 0
+	if (( $# )); then
+		printf "$@" >&2
+	else
+		echo >&2
+	fi
+}
+
+function error
+{
+	printf "$@" >&2
+	exit 1
+}
+
+function ReadSequence
+{
+	local LINE RE='^([^,]+)(,.+|)$'
+	read LINE
+	while [[ "$LINE" =~ $RE ]]; do
+		SEQUENCE+=( "${BASH_REMATCH[1]}" )
+		(( SEQLEN++ ))
+		LINE="${BASH_REMATCH[2]:1}"
+	done
+	debug "Read %d steps\n" $SEQLEN
+}
+
+function CalcHash
+{
+	local DATA="$1"
+	local -i LEN I CC HASH=0
+	(( LEN = ${#DATA} ))
+	for (( I = 0 ; I < LEN ; I++ )); do
+		printf -v CC '%d' \'${DATA:I:1}
+		(( HASH = ( HASH + CC ) * 17 % 256 ))
+	done
+	echo $HASH
+}
+
+function RunSequence
+{
+	local -i I
+	for (( I = 0 ; I < SEQLEN ; I++ )); do
+		(( HASHSUM += $( CalcHash ${SEQUENCE[I]} ) ))
+	done
+}
+
+function CalcResults
+{
+	local INPUT="$1" SEQUENCE=()
+	local -i HASHSUM=0 SEQLEN=0
+	ReadSequence < $INPUT
+	RunSequence
+	printf "Result: %s\n" $HASHSUM
+}
+
+CalcResults $INPUT ; exit $?
